@@ -20,59 +20,166 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Test Connection
+      - name: Copy Files to Server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '✅ Connected to server!'"
+          # Copy everything to server
+          scp -i ~/.ssh/id_ed25519 -r ./* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/bet-bot/
       
-      - name: Deploy Betting Bot
+      - name: Deploy with Django Fixes
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🚀 Starting betting bot deployment...'
+            echo '=== 🚀 BETTING BOT DEPLOYMENT ==='
             cd /var/www/bet-bot
             
-            echo '📥 Pulling latest code from Git...'
-            git pull origin main
+            # Backup current config
+            echo '💾 Backing up current configuration...'
+            cp docker-compose.yml docker-compose.yml.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
             
+            # Create CORRECT docker-compose.yml for nested Django structure
+            echo '📝 Creating fixed docker-compose.yml...'
+            cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: betting_bot
+      POSTGRES_USER: betting_user
+      POSTGRES_PASSWORD: betting_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ \"CMD-SHELL\", \"pg_isready -U betting_user -d betting_bot\" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    command: >
+      sh -c \"cd /app/betting_bot &&
+             python manage.py wait_for_db &&
+             python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000\"
+    volumes:
+      - .:/app
+    ports:
+      - \"8000:8000\"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://betting_user:betting_pass@db:5432/betting_bot
+      DEBUG: \"False\"
+    healthcheck:
+      test: [ \"CMD\", \"curl\", \"-f\", \"http://localhost:8000/health/\" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+EOF
+            
+            # Install Python dependencies
             echo '📦 Installing Python dependencies...'
+            pip install -r requirements.txt
+            
+            # Install Docker dependencies if needed
+            echo '🐳 Checking Docker setup...'
             cd betting_bot
-            pip install -r ../requirements.txt
+            if [ ! -f 'wait_for_db.py' ]; then
+              echo '📝 Creating wait_for_db.py...'
+              cat > wait_for_db.py << 'PYEOF'
+import time
+import psycopg2
+import os
+from django.core.management.base import BaseCommand
+
+class Command(BaseCommand):
+    def handle(self, *args, **options):
+        self.stdout.write('Waiting for database...')
+        db_conn = None
+        for i in range(30):
+            try:
+                conn = psycopg2.connect(
+                    host=os.environ.get('DB_HOST', 'db'),
+                    database=os.environ.get('DB_NAME', 'betting_bot'),
+                    user=os.environ.get('DB_USER', 'betting_user'),
+                    password=os.environ.get('DB_PASSWORD', 'betting_pass'),
+                    port=os.environ.get('DB_PORT', '5432')
+                )
+                conn.close()
+                self.stdout.write(self.style.SUCCESS('Database available!'))
+                return
+            except psycopg2.OperationalError:
+                self.stdout.write(f'Attempt {i+1}/30: Database not ready, waiting 2 seconds...')
+                time.sleep(2)
+        
+        self.stdout.write(self.style.ERROR('Database not available after 60 seconds!'))
+        exit(1)
+PYEOF
+            fi
             cd ..
             
-            echo '🐳 Rebuilding Docker containers...'
-            docker-compose down
+            # Build and start Docker
+            echo '🔨 Building Docker containers...'
             docker-compose build --no-cache
             
             echo '⚡ Starting services...'
+            docker-compose down
             docker-compose up -d
             
-            echo '⏳ Waiting for services to stabilize...'
-            sleep 15
+            # Wait and check
+            echo '⏳ Waiting for services to start (20 seconds)...'
+            sleep 20
             
-            echo '🔍 Checking service status...'
-            docker ps --filter \"name=bet_\"
-            
-            echo '📊 Deployment complete!'
+            echo '=== 📊 DEPLOYMENT COMPLETE ==='
           "
       
-      - name: Health Check
+      - name: Verify Deployment
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🔧 Running health checks...'
+            echo '🔍 Verifying deployment...'
             
-            # Check if containers are running (not restarting)
-            RESTARTING=\$(docker ps --filter \"name=bet_\" --filter \"status=restarting\" --format \"{{.Names}}\" | wc -l)
+            # Check container status
+            echo '📋 Container Status:'
+            docker ps --filter \"name=bet-bot\" --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\\t{{.RunningFor}}\"
             
-            if [ \"\$RESTARTING\" -gt 0 ]; then
-              echo '❌ Some services are restarting. Checking logs...'
-              docker-compose logs --tail=50
-              echo 'Trying to fix by rebuilding...'
-              cd /var/www/bet-bot
-              docker-compose down
-              docker-compose up -d
-              exit 1
+            # Check web service specifically
+            WEB_STATUS=\$(docker inspect --format='{{.State.Status}}' bet-bot-web 2>/dev/null || echo 'not-found')
+            
+            if [ \"\$WEB_STATUS\" = \"running\" ]; then
+              echo '✅ Web container is running'
+              
+              # Check Django
+              echo '🌐 Testing Django...'
+              if docker exec bet-bot-web sh -c 'cd betting_bot && python manage.py check'; then
+                echo '✅ Django check passed!'
+                
+                # Try to access the site
+                echo '🔗 Testing HTTP response...'
+                if curl -s -f -o /dev/null -w \"%{http_code}\" http://localhost:8000/health/ 2>/dev/null || \
+                   curl -s -f -o /dev/null -w \"%{http_code}\" http://localhost:8000/ 2>/dev/null; then
+                  echo '✅ Django is responding to HTTP requests!'
+                else
+                  echo '⚠️ Django running but not responding to HTTP. Checking logs...'
+                  docker-compose logs --tail=20
+                fi
+              else
+                echo '❌ Django check failed'
+                docker-compose logs --tail=30
+              fi
             else
-              echo '✅ All services running stable!'
-              echo '📋 Final status:'
-              docker ps --filter \"name=bet_\" --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"
+              echo '❌ Web container status: '\$WEB_STATUS
+              echo '📋 Full logs:'
+              docker-compose logs --tail=50
+              exit 1
             fi
+            
+            echo '✅ Verification complete!'
           "
