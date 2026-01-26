@@ -1,12 +1,14 @@
 #!/bin/sh
+set -e
 
-echo "Applying database migrations..."
+echo "⏳ Waiting for PostgreSQL..."
+python manage.py wait_for_db
+
+echo "📦 Applying migrations..."
 python manage.py migrate --noinput
 
-echo "Collecting static files..."
+echo "🧹 Collecting static files..."
 python manage.py collectstatic --noinput
 
-echo "Starting Gunicorn..."
-exec gunicorn betting_bot.wsgi:application \
-    --bind 0.0.0.0:8000 \
-    --workers 3
+echo "🚀 Starting application..."
+exec "$@"
