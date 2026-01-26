@@ -3,18 +3,15 @@ name: Deploy Betting Bot
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     
     steps:
-      # Step 1: Get your code
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # Step 2: Set up SSH connection
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -22,60 +19,67 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
       
-      # Step 3: Test connection
-      - name: Test SSH Connection
+      - name: Prepare Server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '🚀 Connected to betting bot server!'"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            # Create directory if it doesn't exist
+            sudo mkdir -p /var/www/bet-bot
+            sudo chown -R vico:vico /var/www/bet-bot
+            
+            echo '📁 Betting bot directory: /var/www/bet-bot'
+            ls -la /var/www/bet-bot/
+          "
       
-      # Step 4: Deploy Betting Bot
+      - name: Copy Files to Server
+        run: |
+          # Copy all files to the correct location
+          scp -i ~/.ssh/id_ed25519 -r ./* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/bet-bot/
+      
       - name: Deploy Betting Bot
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # Go to betting bot directory
-            echo '📂 Moving to betting bot directory...'
-            cd /home/vico/betting-bot
+            echo '🚀 Deploying betting bot...'
+            cd /var/www/bet-bot
             
-            # Pull latest code
-            echo '📥 Pulling latest code from GitHub...'
-            git pull origin main
+            echo '📥 Pulling latest code (if using git)...'
+            # If it's a git repo, uncomment:
+            # git pull origin main || true
             
-            # Build and restart Docker containers
-            echo '🐳 Rebuilding Docker containers...'
+            echo '🐳 Stopping old containers...'
+            docker-compose down
+            
+            echo '🔨 Building new containers...'
             docker-compose build --no-cache
             
-            echo '🔄 Restarting services...'
-            docker-compose down
+            echo '⚡ Starting services...'
             docker-compose up -d
             
-            # Check if services are running
-            echo '🔍 Checking service status...'
-            sleep 10  # Wait for containers to start
+            echo '⏳ Waiting for services to start...'
+            sleep 10
+            
+            echo '🔍 Checking container status...'
             docker ps --filter \"name=bet_\"
             
-            # View logs if there are issues
-            echo '📋 Checking logs for errors...'
+            echo '📋 Viewing logs...'
             docker-compose logs --tail=20
             
-            echo '✅ Betting bot deployment completed!'
+            echo '✅ Betting bot deployed to /var/www/bet-bot!'
           "
       
-      # Optional: Health check
-      - name: Verify Services
+      - name: Verify Deployment
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🔍 Running health checks...'
+            echo '🔧 Verification check...'
             
-            # Check if all 3 services are running
-            RUNNING_CONTAINERS=\$(docker ps --filter \"name=bet_\" --format \"table {{.Names}}\\t{{.Status}}\" | grep -v NAMES)
-            echo \"Running containers:\\n\$RUNNING_CONTAINERS\"
+            # Check all 3 services are running
+            RUNNING=\$(docker ps --filter \"name=bet_\" --quiet | wc -l)
+            echo \"Running betting services: \$RUNNING/3\"
             
-            # Count running betting bot containers
-            COUNT=\$(echo \"\$RUNNING_CONTAINERS\" | wc -l)
-            if [ \"\$COUNT\" -eq 3 ]; then
-              echo '✓ All 3 betting bot services are running!'
-            else
-              echo \"⚠️ Only \$COUNT/3 services running. Checking logs...\"
-              docker-compose logs --tail=30
+            if [ \"\$RUNNING\" -lt 3 ]; then
+              echo '⚠️ Some services may have failed. Checking logs...'
+              docker-compose logs --tail=50
               exit 1
+            else
+              echo '✓ All services running!'
             fi
           "
