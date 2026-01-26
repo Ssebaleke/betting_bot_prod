@@ -1,166 +1,28 @@
-name: Deploy Betting Bot
+version: "3.9"
 
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-      
-      - name: Deploy with Auto-Fixes
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🚀 Deploying betting bot...'
-            cd /var/www/bet-bot
-            
-            # Pull latest code
-            git pull origin main
-            
-            # 1. CREATE DOCKERFILE IF MISSING
-            if [ ! -f 'Dockerfile' ]; then
-              echo '📝 Creating Dockerfile (was missing)...'
-              cat > Dockerfile << 'EOF'
-FROM python:3.11-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y gcc postgresql-client
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-RUN mkdir -p static
-ENV PYTHONPATH=/app/betting_bot
-CMD [\"gunicorn\", \"betting_bot.betting_bot.wsgi:application\", \"--bind\", \"0.0.0.0:8000\"]
-EOF
-            else
-              echo '📝 Using existing Dockerfile'
-              cat Dockerfile
-            fi
-            
-            # 2. FIX DOCKER-COMPOSE WITH CORRECT WSGI PATH
-            echo '🔧 Fixing docker-compose.yml...'
-            cat > docker-compose.yml << 'EOF'
-version: \"3.9\"
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile
+    container_name: bet-bot-web
+    command: gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
   db:
     image: postgres:15
     container_name: bet-bot-db
-    restart: always
     environment:
       POSTGRES_DB: betbot
       POSTGRES_USER: betbot
       POSTGRES_PASSWORD: betbot
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [\"CMD-SHELL\", \"pg_isready -U betbot -d betbot\"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  web:
-    build: .
-    container_name: bet-bot-web
-    restart: unless-stopped
-    command: >
-      sh -c \"cd betting_bot &&
-             python manage.py wait_for_db &&
-             python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000\"
-    ports:
-      - \"8000:8000\"
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - .:/app
-    environment:
-      DATABASE_URL: postgres://betbot:betbot@db:5432/betbot
+
 volumes:
   postgres_data:
-EOF
-            
-            # 3. CREATE WAIT_FOR_DB.PY IF MISSING
-            if [ ! -f 'betting_bot/wait_for_db.py' ]; then
-              echo '⏳ Creating wait_for_db.py...'
-              cat > betting_bot/wait_for_db.py << 'PYEOF'
-import time, psycopg2, os
-from django.core.management.base import BaseCommand
-class Command(BaseCommand):
-    def handle(self, *args, **options):
-        self.stdout.write('Waiting for database...')
-        for i in range(30):
-            try:
-                conn = psycopg2.connect(
-                    host='db', database='betbot', 
-                    user='betbot', password='betbot', port=5432
-                )
-                conn.close()
-                self.stdout.write('✅ Database available!')
-                return
-            except:
-                time.sleep(2)
-        self.stdout.write('❌ Database not available!')
-        exit(1)
-PYEOF
-            fi
-            
-            # 4. DEPLOY
-            echo '🐳 Building and starting containers...'
-            docker-compose down 2>/dev/null || true
-            docker-compose build --no-cache
-            docker-compose up -d
-            
-            echo '✅ Deployment complete!'
-          "
-      
-      - name: Verify
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🔍 Verifying deployment...'
-            sleep 25
-            
-            echo '📋 Container status:'
-            docker-compose ps
-            
-            echo '📊 Checking web container...'
-            if docker ps --filter 'name=bet-bot-web' --format '{{.Status}}' | grep -q Up; then
-              echo '✅ Web container is UP!'
-              
-              # Test Django
-              echo '🧪 Testing Django...'
-              if docker exec bet-bot-web sh -c 'cd betting_bot && python manage.py check'; then
-                echo '✅ Django is healthy!'
-                
-                # Try HTTP request
-                echo '🌐 Testing HTTP access...'
-                if curl -s -f http://localhost:8000/ >/dev/null 2>&1 || \
-                   curl -s -f http://localhost:8000/health/ >/dev/null 2>&1 || \
-                   curl -s -f http://localhost:8000/admin/ >/dev/null 2>&1; then
-                  echo '✅ HTTP access works!'
-                else
-                  echo '⚠️ Django running but HTTP not responding'
-                fi
-              else
-                echo '❌ Django check failed'
-                docker-compose logs web --tail=30
-              fi
-            else
-              echo '❌ Web container not running'
-              echo '📋 Logs:'
-              docker-compose logs --tail=50
-              exit 1
-            fi
-          "
