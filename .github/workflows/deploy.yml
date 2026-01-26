@@ -13,13 +13,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug VPS_HOST
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+            echo "❌ VPS_HOST is EMPTY"
+            exit 1
+          else
+            echo "✅ VPS_HOST is PRESENT"
+          fi
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
           script: |
             cd ${{ secrets.VPS_PATH }}
             docker-compose down
