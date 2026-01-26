@@ -1,8 +1,9 @@
-name: Deploy Docker App
+name: Deploy Betting Bot
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   deploy:
@@ -24,45 +25,57 @@ jobs:
       # Step 3: Test connection
       - name: Test SSH Connection
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '🚀 Connected to server successfully!'"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '🚀 Connected to betting bot server!'"
       
-      # Step 4: Deploy Docker Application
-      - name: Deploy Docker App
+      # Step 4: Deploy Betting Bot
+      - name: Deploy Betting Bot
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # ⚠️ IMPORTANT: Change to your project directory
-            PROJECT_DIR='/home/vico/your-project-directory'
-            PROJECT_NAME='your-project-name'  # Used for container names
+            # Go to betting bot directory
+            echo '📂 Moving to betting bot directory...'
+            cd /home/vico/betting-bot
             
-            echo '📂 Moving to project directory: $PROJECT_DIR'
-            cd \$PROJECT_DIR
-            
-            echo '📥 Pulling latest code...'
+            # Pull latest code
+            echo '📥 Pulling latest code from GitHub...'
             git pull origin main
             
-            echo '🐳 Building Docker images...'
+            # Build and restart Docker containers
+            echo '🐳 Rebuilding Docker containers...'
             docker-compose build --no-cache
             
-            echo '🔄 Restarting Docker containers...'
+            echo '🔄 Restarting services...'
             docker-compose down
             docker-compose up -d
             
-            echo '🧹 Cleaning up old images...'
-            docker image prune -f
+            # Check if services are running
+            echo '🔍 Checking service status...'
+            sleep 10  # Wait for containers to start
+            docker ps --filter \"name=bet_\"
             
-            echo '📊 Checking container status...'
-            docker ps --filter \"name=\$PROJECT_NAME\"
+            # View logs if there are issues
+            echo '📋 Checking logs for errors...'
+            docker-compose logs --tail=20
             
-            echo '✅ Deployment completed successfully!'
+            echo '✅ Betting bot deployment completed!'
           "
       
       # Optional: Health check
-      - name: Verify Deployment
+      - name: Verify Services
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             echo '🔍 Running health checks...'
-            # Add your health check commands here
-            # Example: curl -f http://localhost:3000 || exit 1
-            sleep 5
-            echo '✓ All services are running'
+            
+            # Check if all 3 services are running
+            RUNNING_CONTAINERS=\$(docker ps --filter \"name=bet_\" --format \"table {{.Names}}\\t{{.Status}}\" | grep -v NAMES)
+            echo \"Running containers:\\n\$RUNNING_CONTAINERS\"
+            
+            # Count running betting bot containers
+            COUNT=\$(echo \"\$RUNNING_CONTAINERS\" | wc -l)
+            if [ \"\$COUNT\" -eq 3 ]; then
+              echo '✓ All 3 betting bot services are running!'
+            else
+              echo \"⚠️ Only \$COUNT/3 services running. Checking logs...\"
+              docker-compose logs --tail=30
+              exit 1
+            fi
           "
