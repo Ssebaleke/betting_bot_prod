@@ -52,5 +52,5 @@ jobs:
             # Example for static site:
             # echo 'Deployed!'
             
-            echo '✅ Deployment completed!'
+            echo ' Deployment completed!'
           "
