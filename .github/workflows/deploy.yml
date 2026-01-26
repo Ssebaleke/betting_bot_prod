@@ -1,34 +1,26 @@
-            fi
 name: Deploy Betting Bot
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup SSH
+      - name: Deploy via SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf "%s" "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Deploy
-        run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" << 'EOF'
             set -e
-            echo "🚀 Deploying betting bot..."
             cd /var/www/bet-bot
             git pull origin main
             docker-compose down || true
             docker-compose up -d --build
             docker-compose ps
-            echo "✅ Deployment complete!"
           EOF
