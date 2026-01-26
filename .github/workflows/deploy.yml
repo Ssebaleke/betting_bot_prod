@@ -1,14 +1,12 @@
-name: Deploy Betting Bot
+name: Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,22 +16,21 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          # Add server to known_hosts
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Debug VPS_HOST
-        env:
-          HOST: ${{ secrets.VPS_HOST }}
+      - name: Test Connection
         run: |
-          echo "HOST=[$HOST]"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'Connected successfully!'"
 
-      - name: Deploy to VPS
-        env:
-          HOST: ${{ secrets.VPS_HOST }}
-          USER: ${{ secrets.VPS_USER }}
-          PATH_ON_SERVER: ${{ secrets.VPS_PATH }}
+      - name: Deploy
         run: |
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/id_ed25519 $USER@$HOST "
-            cd $PATH_ON_SERVER &&
-            docker-compose down &&
-            docker-compose up -d --build
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            # Your deployment commands here
+            cd /path/to/your/app
+            git pull origin main
+            # Add other commands like:
+            # npm install
+            # npm run build
+            # pm2 restart app
           "
