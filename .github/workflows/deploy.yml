@@ -3,6 +3,7 @@ name: Deploy Betting Bot
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   deploy:
@@ -19,67 +20,59 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Prepare Server
+      - name: Test Connection
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # Create directory if it doesn't exist
-            sudo mkdir -p /var/www/bet-bot
-            sudo chown -R vico:vico /var/www/bet-bot
-            
-            echo '📁 Betting bot directory: /var/www/bet-bot'
-            ls -la /var/www/bet-bot/
-          "
-      
-      - name: Copy Files to Server
-        run: |
-          # Copy all files to the correct location
-          scp -i ~/.ssh/id_ed25519 -r ./* ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/bet-bot/
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '✅ Connected to server!'"
       
       - name: Deploy Betting Bot
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🚀 Deploying betting bot...'
+            echo '🚀 Starting betting bot deployment...'
             cd /var/www/bet-bot
             
-            echo '📥 Pulling latest code (if using git)...'
-            # If it's a git repo, uncomment:
-            # git pull origin main || true
+            echo '📥 Pulling latest code from Git...'
+            git pull origin main
             
-            echo '🐳 Stopping old containers...'
+            echo '📦 Installing Python dependencies...'
+            cd betting_bot
+            pip install -r ../requirements.txt
+            cd ..
+            
+            echo '🐳 Rebuilding Docker containers...'
             docker-compose down
-            
-            echo '🔨 Building new containers...'
             docker-compose build --no-cache
             
             echo '⚡ Starting services...'
             docker-compose up -d
             
-            echo '⏳ Waiting for services to start...'
-            sleep 10
+            echo '⏳ Waiting for services to stabilize...'
+            sleep 15
             
-            echo '🔍 Checking container status...'
+            echo '🔍 Checking service status...'
             docker ps --filter \"name=bet_\"
             
-            echo '📋 Viewing logs...'
-            docker-compose logs --tail=20
-            
-            echo '✅ Betting bot deployed to /var/www/bet-bot!'
+            echo '📊 Deployment complete!'
           "
       
-      - name: Verify Deployment
+      - name: Health Check
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🔧 Verification check...'
+            echo '🔧 Running health checks...'
             
-            # Check all 3 services are running
-            RUNNING=\$(docker ps --filter \"name=bet_\" --quiet | wc -l)
-            echo \"Running betting services: \$RUNNING/3\"
+            # Check if containers are running (not restarting)
+            RESTARTING=\$(docker ps --filter \"name=bet_\" --filter \"status=restarting\" --format \"{{.Names}}\" | wc -l)
             
-            if [ \"\$RUNNING\" -lt 3 ]; then
-              echo '⚠️ Some services may have failed. Checking logs...'
+            if [ \"\$RESTARTING\" -gt 0 ]; then
+              echo '❌ Some services are restarting. Checking logs...'
               docker-compose logs --tail=50
+              echo 'Trying to fix by rebuilding...'
+              cd /var/www/bet-bot
+              docker-compose down
+              docker-compose up -d
               exit 1
             else
-              echo '✓ All services running!'
+              echo '✅ All services running stable!'
+              echo '📋 Final status:'
+              docker ps --filter \"name=bet_\" --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"
             fi
           "
