@@ -1,4 +1,4 @@
-name: Deploy Betting Bot
+name: Deploy Bet-Bot
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup SSH agent
@@ -22,13 +22,12 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
+      - name: Deploy Bet-Bot
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             set -e
-            cd ~/betting_bot_prod
+            cd /var/www/bet-bot
             git pull origin main
-            docker compose down
             docker compose up -d --build
             docker ps
           "
