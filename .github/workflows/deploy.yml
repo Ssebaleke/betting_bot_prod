@@ -21,16 +21,36 @@ jobs:
 
       - name: Test Connection
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo 'Connected successfully!'"
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '✅ Connected to server successfully!'"
 
-      - name: Deploy
+      - name: Deploy Application
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # Your deployment commands here
-            cd /path/to/your/app
+          ssh -i ~/.ssh/id_25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            # ⚠️ CHANGE THIS PATH to your actual app directory on server
+            cd /home/vico/myapp
+            
+            # Pull latest code
+            echo '📥 Pulling latest code...'
             git pull origin main
-            # Add other commands like:
+            
+            # 🔧 ADD YOUR DEPLOYMENT COMMANDS HERE:
+            
+            # Example for Node.js app:
             # npm install
             # npm run build
-            # pm2 restart app
+            # pm2 restart myapp
+            
+            # Example for PHP app:
+            # composer install
+            # php artisan migrate
+            # sudo systemctl restart apache2
+            
+            # Example for Python app:
+            # pip install -r requirements.txt
+            # sudo systemctl restart gunicorn
+            
+            # Example for static site:
+            # echo 'Deployed!'
+            
+            echo '✅ Deployment completed!'
           "
