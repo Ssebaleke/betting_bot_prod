@@ -28,6 +28,6 @@ jobs:
             set -e
             cd /var/www/bet-bot
             git pull origin main
-            docker compose up -d --build
+            docker-compose up -d --build
             docker ps
           "
