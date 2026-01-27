@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   web:
     build:
@@ -12,7 +10,9 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: always
 
   db:
     image: postgres:15
@@ -23,8 +23,12 @@ services:
       POSTGRES_PASSWORD: betbot
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U betbot -d betbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
-
-  #hello
