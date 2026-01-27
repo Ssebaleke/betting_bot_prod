@@ -2,7 +2,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: betting_bot/Docker/Dockerfile
+      dockerfile: Dockerfile
     container_name: bet-bot-web
     command: gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
     ports:
@@ -10,8 +10,7 @@ services:
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     restart: always
 
   db:
@@ -24,11 +23,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U betbot -d betbot"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   postgres_data:
