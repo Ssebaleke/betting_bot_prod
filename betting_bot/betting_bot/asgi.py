@@ -1,10 +1,10 @@
-import os
+"""
+ASGI config for betting_bot project.
+"""
 
+import os
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault(
-    "DJANGO_SETTINGS_MODULE",
-    "betting_bot.betting_bot.settings"
-)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'betting_bot.betting_bot.settings')
 
 application = get_asgi_application()

@@ -1,14 +1,17 @@
-#!/bin/sh
-set -e
+#!/bin/bash
 
-echo "⏳ Waiting for PostgreSQL..."
-python manage.py wait_for_db
+echo "🚀 Starting Django betting bot..."
 
-echo "📦 Applying migrations..."
-python manage.py migrate --noinput
+cd /app/betting_bot
 
-echo "🧹 Collecting static files..."
+# Wait for database
+if [ -f "wait_for_db.py" ]; then
+    python manage.py wait_for_db
+fi
+
+# Django setup
+python manage.py migrate
 python manage.py collectstatic --noinput
 
-echo "🚀 Starting application..."
-exec "$@"
+# CORRECT nested WSGI path
+exec gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
