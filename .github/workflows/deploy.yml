@@ -1,16 +1,40 @@
-- name: Deploy Bet-Bot
-  run: |
-    ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-      set -e
-      cd /var/www/bet-bot
+name: Deploy Bet-Bot
 
-      git fetch origin main
-      git reset --hard origin/main
-      git clean -fd
+on:
+  push:
+    branches: [ "main" ]
 
-      echo '--- SERVER docker-compose.yml (top) ---'
-      sed -n '1,60p' docker-compose.yml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-      docker-compose up -d --build --remove-orphans
-      docker ps
-    "
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy Bet-Bot
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            set -e
+            cd /var/www/bet-bot
+
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+
+            echo '--- SERVER docker-compose.yml (top) ---'
+            sed -n '1,80p' docker-compose.yml
+
+            docker-compose up -d --build --remove-orphans
+            docker ps
+          "
