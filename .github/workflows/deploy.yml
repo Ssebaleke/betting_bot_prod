@@ -7,10 +7,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Uses your existing secret VPS_SSH_KEY (private key)
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -18,21 +20,23 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Test Connection
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '✅ Connected to server successfully!'"
-
       - name: Deploy Application
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             set -e
             cd /var/www/bet-bot
 
-            echo '📥 Pulling latest code...'
-            git pull origin main
+            # Force sync so the server definitely gets the latest docker-compose.yml
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
 
-            echo '🐳 Deploying containers...'
+            echo '--- docker-compose.yml (server) ---'
+            sed -n '1,80p' docker-compose.yml
+
+            echo '📦 Deploying containers...'
             docker-compose up -d --build --remove-orphans
 
-            echo '✅ Deployment completed!'
+            echo '✅ Done. Running containers:'
+            docker ps
           "
