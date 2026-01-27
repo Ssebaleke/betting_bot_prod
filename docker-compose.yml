@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-web
-    command: gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
     ports:
       - "8000:8000"
     env_file:
