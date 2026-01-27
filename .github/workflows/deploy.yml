@@ -19,134 +19,46 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Deploy with Dockerfile Fix
+      - name: Deploy to Server
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🚀 Ensuring Dockerfile exists...'
+          echo "🚀 Starting deployment to server..."
+          
+          # Copy ALL files to server
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/bet-bot/
+          
+          # Run deployment commands on server
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd /var/www/bet-bot
-            
-            # Pull code
-            git pull origin main
-            
-            # 1. CREATE DOCKERFILE (MUST EXIST IN ROOT)
-            if [ ! -f 'Dockerfile' ]; then
-              echo '📝 Creating Dockerfile in root directory...'
-              cat > Dockerfile << 'DOCKEREOF'
-FROM python:3.11-slim
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-RUN chmod +x Docker/entrypoint.sh
-ENTRYPOINT [\"Docker/entrypoint.sh\"]
-DOCKEREOF
-            fi
-            
-            # 2. CREATE ENTRYPOINT.SH
-            mkdir -p Docker
-            cat > Docker/entrypoint.sh << 'ENTRYEOF'
-#!/bin/bash
-cd betting_bot
-python manage.py wait_for_db
-python manage.py migrate
-python manage.py collectstatic --noinput
-exec gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
-ENTRYEOF
-            chmod +x Docker/entrypoint.sh
-            
-            # 3. CREATE WAIT_FOR_DB.PY
-            cat > betting_bot/wait_for_db.py << 'PYEOF'
-import time, psycopg2
-from django.core.management.base import BaseCommand
-class Command(BaseCommand):
-    def handle(self, *args, **options):
-        self.stdout.write('Waiting for database...')
-        for i in range(30):
-            try:
-                conn = psycopg2.connect(
-                    host='db', database='betbot', 
-                    user='betbot', password='betbot', port=5432
-                )
-                conn.close()
-                self.stdout.write('✅ Database available!')
-                return
-            except:
-                time.sleep(2)
-        self.stdout.write('❌ Database not available!')
-        exit(1)
-PYEOF
-            
-            # 4. UPDATE DOCKER-COMPOSE
-            cat > docker-compose.yml << 'COMPOSEEOF'
-version: \"3.9\"
-services:
-  db:
-    image: postgres:15
-    container_name: bet-bot-db
-    restart: always
-    environment:
-      POSTGRES_DB: betbot
-      POSTGRES_USER: betbot
-      POSTGRES_PASSWORD: betbot
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [\"CMD-SHELL\", \"pg_isready -U betbot -d betbot\"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  web:
-    build: .
-    container_name: bet-bot-web
-    restart: unless-stopped
-    ports:
-      - \"8000:8000\"
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - .:/app
-    environment:
-      DATABASE_URL: postgres://betbot:betbot@db:5432/betbot
-volumes:
-  postgres_data:
-COMPOSEEOF
-            
-            # 5. DEPLOY (CLEAN INSTALL)
-            echo '🐳 Cleaning old containers and building...'
+            echo '🐳 Stopping old containers...'
             docker-compose down --remove-orphans 2>/dev/null || true
+            
+            echo '🔨 Building new containers...'
             docker-compose build --no-cache
+            
+            echo '⚡ Starting services...'
             docker-compose up -d
             
-            echo '✅ Deployment complete!'
+            echo '✅ Deployment complete on server!'
           "
       
-      - name: Verify
+      - name: Verify Deployment
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '🔍 Waiting for startup...'
-            sleep 30
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            echo '🔍 Checking deployment status...'
+            sleep 20
             
-            echo '📋 Container status:'
-            docker-compose ps
-            
-            echo '📊 Checking web container...'
-            WEB_STATUS=\$(docker inspect -f '{{.State.Status}}' bet-bot-web 2>/dev/null || echo 'missing')
-            
-            if [ \"\$WEB_STATUS\" = \"running\" ]; then
+            if docker ps --filter 'name=bet-bot-web' --format '{{.Status}}' | grep -q Up; then
               echo '✅ Web container is running!'
-              echo '📜 Recent logs:'
-              docker-compose logs web --tail=20
+              echo '📋 Recent logs:'
+              docker-compose logs --tail=10
             else
-              echo '❌ Web container status: '\$WEB_STATUS
-              echo '🔧 Checking Dockerfile location...'
-              ls -la /var/www/bet-bot/Dockerfile || echo 'Dockerfile missing!'
-              echo '📜 Full logs:'
-              docker-compose logs --tail=50
+              echo '❌ Web container failed to start'
+              docker-compose logs
               exit 1
             fi
           "
