@@ -12,7 +12,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Uses your existing secret VPS_SSH_KEY (private key)
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -26,19 +25,26 @@ jobs:
             set -e
             cd /var/www/bet-bot
 
-            # Force sync so the server definitely gets the latest docker-compose.yml
+            # Ensure VPS pulls from the repo you are pushing to
+            git remote set-url origin https://github.com/Ssebaleke/betting_bot_prod.git
+
+            # Force sync so server matches GitHub main exactly
             git fetch origin main
             git reset --hard origin/main
             git clean -fd
 
             echo '--- docker-compose.yml (server) ---'
-            sed -n '1,80p' docker-compose.yml
+            sed -n '1,120p' docker-compose.yml
 
-            echo '📦 Deploying containers...'
-            docker-compose up -d --build --remove-orphans
+            echo '--- compose version ---'
+            docker compose version
+
+            echo '📦 Deploying containers (Compose v2)...'
+            docker compose up -d --build --remove-orphans
 
             echo '✅ Done. Running containers:'
             docker ps
-          "          
 
-  #dockerfile 
+            echo '--- web logs (tail) ---'
+            docker logs bet-bot-web --tail=50 || true
+          "
