@@ -16,7 +16,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          # Add server to known_hosts
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Test Connection
@@ -25,34 +24,15 @@ jobs:
 
       - name: Deploy Application
         run: |
-          ssh -i ~/.ssh/id_25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            # ⚠️ CHANGE THIS PATH to your actual app directory on server
-            cd /home/vico/myapp
-            
-            # Pull latest code
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            set -e
+            cd /var/www/bet-bot
+
             echo '📥 Pulling latest code...'
             git pull origin main
-            
-            # 🔧 ADD YOUR DEPLOYMENT COMMANDS HERE:
-            
-            # Example for Node.js app:
-            # npm install
-            # npm run build
-            # pm2 restart myapp
-            
-            # Example for PHP app:
-            # composer install
-            # php artisan migrate
-            # sudo systemctl restart apache2
-            
-            # Example for Python app:
-            # pip install -r requirements.txt
-            # sudo systemctl restart gunicorn
-            
-            # Example for static site:
-            # echo 'Deployed!'
-            
+
+            echo '🐳 Deploying containers...'
+            docker-compose up -d --build --remove-orphans
+
             echo '✅ Deployment completed!'
           "
-
-  #helll
