@@ -14,4 +14,4 @@ python manage.py migrate
 python manage.py collectstatic --noinput
 
 # CORRECT nested WSGI path
-exec gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
+exec gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000

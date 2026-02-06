@@ -3,7 +3,7 @@ from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
-    "betting_bot.betting_bot.settings"
+    "betting_bot.settings"
 )
 
 application = get_wsgi_application()

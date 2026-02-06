@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
+<<<<<<< HEAD
     # Local apps (docker-safe)
     "betting_bot.accounts",
     "betting_bot.packages",
@@ -45,8 +46,21 @@ INSTALLED_APPS = [
     "betting_bot.configs",
     "betting_bot.predictions",
     "betting_bot.api",
+=======
+    # Local app
+    "accounts",
+    "packages",
+    "subscription",
+    "payments",
+    "odds",
+    "bots",
+    "configs",
+    "predictions", 
+    "api",
+>>>>>>> 534348e (Fix docker + django imports, gunicorn, static files)
 
 ]
+
 
 
 # =========================
@@ -68,8 +82,8 @@ MIDDLEWARE = [
 # URLS & WSGI  ✅ FIXED
 # =========================
 
-ROOT_URLCONF = "betting_bot.betting_bot.urls"
-WSGI_APPLICATION = "betting_bot.betting_bot.wsgi.application"
+ROOT_URLCONF = "betting_bot.urls"
+WSGI_APPLICATION = "betting_bot.wsgi.application"
 
 
 # =========================
