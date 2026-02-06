@@ -1,14 +1,15 @@
 """
 Django settings for betting_bot project.
-Docker-friendly settings.
+Docker-friendly settings + correct static serving (WhiteNoise).
 """
 
 from pathlib import Path
 import os
+from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This file is: betting_bot/betting_bot/settings.py
-# So BASE_DIR becomes: /app/betting_bot
+# So BASE_DIR becomes: /app/betting_bot (inside docker, depends on your WORKDIR)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -20,12 +21,21 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-this-in-produc
 
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
 
 # =========================
 # APPLICATIONS
 # =========================
+# IMPORTANT:
+# Use ONE of these app styles:
+# A) If your apps are in /app/betting_bot/<app_name>/  -> use "accounts", "packages", etc
+# B) If your apps are in /app/betting_bot/betting_bot/<app_name>/ -> use "betting_bot.accounts", etc
+#
+# From your earlier folder tree, it looked like top-level apps ("accounts", "packages"...),
+# but you pasted betting_bot.accounts. If that works in your current project, keep it.
+#
+# I’m keeping YOUR current style here to avoid breaking imports.
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -35,8 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-<<<<<<< HEAD
-    # Local apps (docker-safe)
+    # Local apps
     "betting_bot.accounts",
     "betting_bot.packages",
     "betting_bot.subscription",
@@ -46,29 +55,17 @@ INSTALLED_APPS = [
     "betting_bot.configs",
     "betting_bot.predictions",
     "betting_bot.api",
-=======
-    # Local app
-    "accounts",
-    "packages",
-    "subscription",
-    "payments",
-    "odds",
-    "bots",
-    "configs",
-    "predictions", 
-    "api",
->>>>>>> 534348e (Fix docker + django imports, gunicorn, static files)
-
 ]
-
 
 
 # =========================
 # MIDDLEWARE
 # =========================
-
+# WhiteNoise MUST come right after SecurityMiddleware to serve /static/ in production.
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -79,9 +76,8 @@ MIDDLEWARE = [
 
 
 # =========================
-# URLS & WSGI  ✅ FIXED
+# URLS & WSGI
 # =========================
-
 ROOT_URLCONF = "betting_bot.urls"
 WSGI_APPLICATION = "betting_bot.wsgi.application"
 
@@ -89,7 +85,6 @@ WSGI_APPLICATION = "betting_bot.wsgi.application"
 # =========================
 # TEMPLATES
 # =========================
-
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -109,27 +104,19 @@ TEMPLATES = [
 
 # =========================
 # DATABASE
-# - If DATABASE_URL exists -> use Postgres (docker db service)
-# - Otherwise -> fallback to SQLite
 # =========================
-
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 if DATABASE_URL:
-    # expected: postgres://user:pass@host:port/dbname
-    # Example for your docker-compose:
-    # postgres://betbot:betbot@db:5432/betbot
-    from urllib.parse import urlparse
-
+    # Example: postgres://betbot:betbot@db:5432/betbot
     u = urlparse(DATABASE_URL)
-
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": u.path.lstrip("/"),
-            "USER": u.username,
-            "PASSWORD": u.password,
-            "HOST": u.hostname,
+            "NAME": (u.path or "").lstrip("/"),
+            "USER": u.username or "",
+            "PASSWORD": u.password or "",
+            "HOST": u.hostname or "",
             "PORT": u.port or 5432,
         }
     }
@@ -145,7 +132,6 @@ else:
 # =========================
 # PASSWORD VALIDATION
 # =========================
-
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -157,7 +143,6 @@ AUTH_PASSWORD_VALIDATORS = [
 # =========================
 # INTERNATIONALIZATION
 # =========================
-
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Africa/Kampala"
 USE_I18N = True
@@ -165,15 +150,16 @@ USE_TZ = True
 
 
 # =========================
-# STATIC FILES
+# STATIC FILES (FIXES ADMIN CSS)
 # =========================
-
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise storage (recommended for production)
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
 # =========================
 # DEFAULT PRIMARY KEY
 # =========================
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

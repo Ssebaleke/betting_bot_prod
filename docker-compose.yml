@@ -4,13 +4,6 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-web
-<<<<<<< HEAD
-    command: gunicorn betting_bot.betting_bot.wsgi:application --bind 0.0.0.0:8000
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-=======
     command: gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000
     ports:
       - "8000:8000"
@@ -18,7 +11,6 @@ services:
       - .env
     environment:
       - PYTHONPATH=/app/betting_bot
->>>>>>> 534348e (Fix docker + django imports, gunicorn, static files)
     depends_on:
       - db
 
@@ -29,8 +21,6 @@ services:
       POSTGRES_DB: betbot
       POSTGRES_USER: betbot
       POSTGRES_PASSWORD: betbot
-<<<<<<< HEAD
-=======
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
@@ -38,4 +28,3 @@ services:
 volumes:
   postgres_data:
 
->>>>>>> 534348e (Fix docker + django imports, gunicorn, static files)
