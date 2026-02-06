@@ -35,16 +35,17 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Local apps
-    "accounts",
-    "packages",
-    "subscription",
-    "payments",
-    "odds",
-    "bots",
-    "configs",
-    "predictions",
-    "api",
+    # Local apps (docker-safe)
+    "betting_bot.accounts",
+    "betting_bot.packages",
+    "betting_bot.subscription",
+    "betting_bot.payments",
+    "betting_bot.odds",
+    "betting_bot.bots",
+    "betting_bot.configs",
+    "betting_bot.predictions",
+    "betting_bot.api",
+
 ]
 
 

@@ -3,15 +3,13 @@ name: Deploy
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -23,28 +21,24 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             set -e
-            cd /var/www/bet-bot
+            cd /home/vico/apps/betting_bot_prod
 
-            # Ensure VPS pulls from the repo you are pushing to
-            git remote set-url origin https://github.com/Ssebaleke/betting_bot_prod.git
-
-            # Force sync so server matches GitHub main exactly
             git fetch origin main
             git reset --hard origin/main
             git clean -fd
 
-            echo '--- docker-compose.yml (server) ---'
-            sed -n '1,120p' docker-compose.yml
-
             echo '--- compose version ---'
             docker compose version
 
-            echo '📦 Deploying containers (Compose v2)...'
+            echo '📦 Deploying containers...'
             docker compose up -d --build --remove-orphans
 
-            echo '✅ Done. Running containers:'
+            echo '✅ Running containers:'
             docker ps
 
-            echo '--- web logs (tail) ---'
-            docker logs bet-bot-web --tail=50 || true
+            echo '--- compose status ---'
+            docker compose ps
+
+            echo '--- logs (tail) ---'
+            docker compose logs --tail=50
           "
