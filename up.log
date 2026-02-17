@@ -1,0 +1,162 @@
+#1 [internal] load local bake definitions
+#1 reading from stdin 532B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 439B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 0.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/6] FROM docker.io/library/python:3.11-slim@sha256:db27ce7778e5f581d5d97812ee577a01a9fffbfa612c47fc521fa684e3389c9b
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 11.77kB 0.0s done
+#6 DONE 0.0s
+
+#7 [2/6] WORKDIR /app/betting_bot
+#7 CACHED
+
+#8 [3/6] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     libpq-dev   && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [4/6] COPY requirements.txt /app/requirements.txt
+#9 CACHED
+
+#10 [5/6] RUN pip install --no-cache-dir -r /app/requirements.txt
+#10 3.447 ERROR: Invalid requirement: '��anyio==4.12.1' (from line 1 of /app/requirements.txt)
+#10 3.636 
+#10 3.636 [notice] A new release of pip is available: 24.0 -> 26.0.1
+#10 3.636 [notice] To update, run: pip install --upgrade pip
+#10 ERROR: process "/bin/sh -c pip install --no-cache-dir -r /app/requirements.txt" did not complete successfully: exit code: 1
+------
+ > [5/6] RUN pip install --no-cache-dir -r /app/requirements.txt:
+3.447 ERROR: Invalid requirement: '��anyio==4.12.1' (from line 1 of /app/requirements.txt)
+3.636 
+3.636 [notice] A new release of pip is available: 24.0 -> 26.0.1
+3.636 [notice] To update, run: pip install --upgrade pip
+------
+Dockerfile:16
+
+--------------------
+
+  14 |     # python deps
+
+  15 |     COPY requirements.txt /app/requirements.txt
+
+  16 | >>> RUN pip install --no-cache-dir -r /app/requirements.txt
+
+  17 |     
+
+  18 |     # project files
+
+--------------------
+
+failed to solve: process "/bin/sh -c pip install --no-cache-dir -r /app/requirements.txt" did not complete successfully: exit code: 1
+
+89444  dockerd --group docker --exec-root=/run/snap.docker --data-root=/var/snap/docker/common/var-lib-docker --pidfile=/run/snap.docker/docker.pid --config-file=/var/snap/docker/3377/config/daemon.json
+
+github.com/moby/buildkit/executor/runcexecutor.exitError
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/executor/runcexecutor/executor.go:391
+
+github.com/moby/buildkit/executor/runcexecutor.(*runcExecutor).Run
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/executor/runcexecutor/executor.go:339
+
+github.com/moby/buildkit/solver/llbsolver/ops.(*ExecOp).Exec
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/llbsolver/ops/exec.go:497
+
+github.com/moby/buildkit/solver.(*sharedOp).Exec.func2
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/jobs.go:1120
+
+github.com/moby/buildkit/util/flightcontrol.(*call[...]).run
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/util/flightcontrol/flightcontrol.go:122
+
+sync.(*Once).doSlow
+
+	/snap/go/10938/src/sync/once.go:78
+
+sync.(*Once).Do
+
+	/snap/go/10938/src/sync/once.go:69
+
+runtime.goexit
+
+	/snap/go/10938/src/runtime/asm_amd64.s:1700
+
+
+
+133563 v0.24.0 /usr/libexec/docker/cli-plugins/docker-buildx bake --file - --progress rawjson --metadata-file /tmp/compose-build-metadataFile-1966642783.json --allow fs.read=/home/vico/betting_bot_prod
+
+google.golang.org/grpc.(*ClientConn).Invoke
+
+	google.golang.org/grpc@v1.69.4/call.go:35
+
+github.com/moby/buildkit/api/services/control.(*controlClient).Solve
+
+	github.com/moby/buildkit@v0.22.0/api/services/control/control_grpc.pb.go:88
+
+github.com/moby/buildkit/client.(*Client).solve.func2
+
+	github.com/moby/buildkit@v0.22.0/client/solve.go:268
+
+golang.org/x/sync/errgroup.(*Group).Go.func1
+
+	golang.org/x/sync@v0.13.0/errgroup/errgroup.go:79
+
+runtime.goexit
+
+	runtime/asm_amd64.s:1700
+
+
+
+89444  dockerd --group docker --exec-root=/run/snap.docker --data-root=/var/snap/docker/common/var-lib-docker --pidfile=/run/snap.docker/docker.pid --config-file=/var/snap/docker/3377/config/daemon.json
+
+github.com/moby/buildkit/solver.(*edge).execOp
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/edge.go:963
+
+github.com/moby/buildkit/solver/internal/pipe.NewWithFunction[...].func2
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/internal/pipe/pipe.go:78
+
+runtime.goexit
+
+	/snap/go/10938/src/runtime/asm_amd64.s:1700
+
+
+
+133563 v0.24.0 /usr/libexec/docker/cli-plugins/docker-buildx bake --file - --progress rawjson --metadata-file /tmp/compose-build-metadataFile-1966642783.json --allow fs.read=/home/vico/betting_bot_prod
+
+github.com/moby/buildkit/client.(*Client).solve.func2
+
+	github.com/moby/buildkit@v0.22.0/client/solve.go:285
+
+golang.org/x/sync/errgroup.(*Group).Go.func1
+
+	golang.org/x/sync@v0.13.0/errgroup/errgroup.go:79
+
+
+
+89444  dockerd --group docker --exec-root=/run/snap.docker --data-root=/var/snap/docker/common/var-lib-docker --pidfile=/run/snap.docker/docker.pid --config-file=/var/snap/docker/3377/config/daemon.json
+
+github.com/moby/buildkit/solver/llbsolver/ops.(*ExecOp).Exec
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/llbsolver/ops/exec.go:518
+
+github.com/moby/buildkit/solver.(*sharedOp).Exec.func2
+
+	/build/docker/parts/engine/build/.gopath/src/github.com/docker/docker/vendor/github.com/moby/buildkit/solver/jobs.go:1120
+
+
+

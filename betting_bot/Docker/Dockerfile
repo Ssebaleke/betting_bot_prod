@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /app/betting_bot
 
 # system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -17,3 +17,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # project files
 COPY . /app
+
