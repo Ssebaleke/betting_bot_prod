@@ -16,6 +16,13 @@ SUCCESS_STATUSES = {"completed", "success", "successful", "paid"}
 def initiate_payment_view(request):
     """
     Initiate MakyPay request-to-pay
+
+    POST JSON:
+    {
+      "phone": "0708826558",
+      "package_id": 1,
+      "user_id": 10
+    }
     """
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method")

@@ -3,7 +3,7 @@ import requests
 
 def normalize_ug_phone(phone: str) -> str:
     """
-    Normalize Uganda phone numbers to: 2567XXXXXXXX
+    Normalize Uganda phone numbers to 2567XXXXXXXX.
 
     Accepts:
     - 07XXXXXXXX
@@ -43,14 +43,16 @@ class MakyPayClient:
 
     def request_to_pay(self, phone_number: str, amount, reference: str, webhook_url: str, currency: str = "UGX"):
         """
-        IMPORTANT FIXES:
-        - Endpoint uses trailing slash
-        - Payload uses phone_number key (NOT phone)
+        Initiate a collection request (MoMo STK push).
+        FIXES:
+        - Correct endpoint with trailing slash
+        - Correct payload keys (phone_number)
+        - Strong timeout to prevent gunicorn hang (connect, read)
         """
         url = f"{self.base_url}/api/v1/collections/request-to-pay/"
 
         payload = {
-            "phone_number": phone_number,
+            "phone_number": phone_number,  # ✅ correct field
             "amount": amount,
             "reference": reference,
             "webhook_url": webhook_url,
@@ -62,7 +64,11 @@ class MakyPayClient:
             "Content-Type": "application/json",
         }
 
-        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        try:
+            # ✅ prevents long hangs that trigger gunicorn WORKER TIMEOUT
+            r = requests.post(url, json=payload, headers=headers, timeout=(5, 25))
+        except requests.RequestException as e:
+            raise ValueError(f"MakyPay request failed: {e}")
 
         if r.status_code >= 400:
             raise ValueError(f"MakyPay {r.status_code} at {url}: {r.text}")

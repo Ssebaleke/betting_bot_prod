@@ -1,24 +1,23 @@
 from __future__ import annotations
 
 import uuid
+import logging
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
-
 from django.contrib.auth.models import User
-from packages.models import Package
 
+from packages.models import Package
 from .models import Payment, PaymentProvider, PaymentProviderConfig
 from .makypay import MakyPayClient, normalize_ug_phone
 
-
-SUCCESS_STATUSES = {"completed", "success", "successful", "paid"}
+logger = logging.getLogger(__name__)
 
 
 def get_active_provider() -> tuple[PaymentProvider, PaymentProviderConfig]:
     """
-    Return the active provider + its active config.
+    Return active PaymentProvider + its active config.
     """
     provider = PaymentProvider.objects.filter(is_active=True).first()
     if not provider:
@@ -34,25 +33,34 @@ def get_active_provider() -> tuple[PaymentProvider, PaymentProviderConfig]:
 @transaction.atomic
 def initiate_payment(user: User, package: Package, phone: str) -> Payment:
     """
-    Creates PENDING Payment and triggers MakyPay request-to-pay.
+    1) Normalize phone
+    2) Create Payment (PENDING)
+    3) Call MakyPay request-to-pay
+    4) Return Payment
     """
     phone_number = normalize_ug_phone(phone)
 
-    # Get package price (adjust if your field name differs)
-    amount_val = getattr(package, "price", None) or getattr(package, "amount", None)
-    if amount_val is None:
-        raise ValueError("Package is missing a price/amount field.")
+    # package price field
+    price_val = getattr(package, "price", None)
+    if price_val is None:
+        # fallback if your package uses "amount"
+        price_val = getattr(package, "amount", None)
 
-    amount = Decimal(str(amount_val))
+    if price_val is None:
+        raise ValueError("Package has no price/amount field. Add `price` or `amount` on Package.")
 
-    # Prevent duplicate pending payments in last 2 minutes
-    recent = Payment.objects.filter(
+    amount = Decimal(str(price_val))
+
+    # Prevent duplicate pending payments within 2 minutes (optional safety)
+    recent_pending = Payment.objects.filter(
         user=user,
         status=Payment.STATUS_PENDING,
         created_at__gte=timezone.now() - timezone.timedelta(minutes=2),
     ).order_by("-created_at").first()
-    if recent:
-        return recent
+
+    if recent_pending:
+        logger.info("Returning recent pending payment ref=%s user=%s", recent_pending.reference, user.id)
+        return recent_pending
 
     provider, config = get_active_provider()
 
@@ -61,7 +69,7 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
     payment = Payment.objects.create(
         user=user,
         package=package,
-        provider=provider,              # ✅ required by your model
+        provider=provider,     # ✅ required by your model
         phone=phone_number,
         amount=amount,
         reference=reference,
@@ -73,16 +81,21 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
         secret_key=config.secret_key,
     )
 
-    # MakyPay expects number - int is safer for UGX
+    # Use integer for UGX if no decimals
     amount_for_api = int(amount) if amount == amount.to_integral_value() else float(amount)
 
+    logger.info("MakyPay START ref=%s phone=%s amount=%s", reference, phone_number, amount_for_api)
+
+    # This is where previous code could hang and kill the worker
     client.request_to_pay(
         phone_number=phone_number,
         amount=amount_for_api,
         reference=reference,
-        webhook_url=config.webhook_url,  # ✅ comes from admin config
+        webhook_url=config.webhook_url,  # ✅ from admin config (must be PUBLIC url)
         currency="UGX",
     )
+
+    logger.info("MakyPay END ref=%s", reference)
 
     return payment
 
@@ -90,11 +103,13 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
 @transaction.atomic
 def confirm_payment(reference: str, external_reference: str | None = None) -> Payment:
     """
-    Marks payment SUCCESS and activates the user's package/subscription (you will connect this to BetBot access).
-    Idempotent: if already SUCCESS, it won't duplicate.
+    Webhook confirms payment.
+    Only marks SUCCESS here to avoid breaking your existing subscription logic.
+    (We will link it to Subscription app after you show Subscription model.)
     """
     payment = Payment.objects.select_for_update().get(reference=reference)
 
+    # idempotent
     if payment.status == Payment.STATUS_SUCCESS:
         return payment
 
@@ -102,15 +117,6 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     payment.external_reference = external_reference
     payment.save(update_fields=["status", "external_reference"])
 
-    # ✅ Hook point: activate bet access
-    # If you have a Subscription model, update/create it here.
-    # If you use User profile fields, set them here.
-    #
-    # Example pseudo:
-    # - set user.is_paid=True
-    # - set expiry based on package duration
-    #
-    # I need your Package model (duration field) + how you store active users
-    # to complete this part perfectly.
+    logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
 
     return payment
