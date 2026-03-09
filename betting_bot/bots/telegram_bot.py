@@ -57,7 +57,7 @@ def ensure_telegram_profile(telegram_id, username):
         telegram_id=telegram_id,
         defaults={"username": username},
     )
-    if created and not profile.user:
+    if not profile.user:
         user = User.objects.create_user(
             username=f"tg_{telegram_id}",
             first_name=username or "User",
