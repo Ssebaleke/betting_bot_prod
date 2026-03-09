@@ -15,7 +15,7 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-web
-    command: gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn betting_bot.wsgi:application --bind 0.0.0.0:8000 --timeout 120
     env_file:
       - .env
     environment:

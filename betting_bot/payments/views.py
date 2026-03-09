@@ -65,19 +65,29 @@ def makypay_webhook(request):
     """
     Webhook called by MakyPay Wire-API
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if request.method != "POST":
         return HttpResponseBadRequest("Invalid request method")
 
+    # Log raw request for debugging
+    logger.info(f"MakyPay webhook received: body={request.body}, content_type={request.content_type}")
+    
     try:
         payload = json.loads(request.body or b"{}")
     except json.JSONDecodeError:
+        logger.error(f"Invalid JSON from MakyPay: {request.body}")
         return HttpResponseBadRequest("Invalid JSON")
 
+    logger.info(f"MakyPay webhook payload: {payload}")
+    
     reference = payload.get("reference")
     status = (payload.get("status") or "").lower().strip()
     external_reference = payload.get("external_reference")
 
     if not reference or not status:
+        logger.warning(f"Missing fields in webhook: reference={reference}, status={status}")
         return HttpResponseBadRequest("Missing required fields: reference, status")
 
     if status not in SUCCESS_STATUSES:

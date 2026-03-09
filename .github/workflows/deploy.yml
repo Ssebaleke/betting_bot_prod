@@ -21,24 +21,15 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             set -e
-            cd /home/vico/apps/betting_bot_prod
+            cd ~/Bet-Bot
 
-            git fetch origin main
-            git reset --hard origin/main
-            git clean -fd
+            echo '📥 Pulling latest code...'
+            git pull origin main
 
-            echo '--- compose version ---'
-            docker compose version
+            echo '🔄 Restarting containers...'
+            docker compose down
+            docker compose up -d --build
 
-            echo '📦 Deploying containers...'
-            docker compose up -d --build --remove-orphans
-
-            echo '✅ Running containers:'
-            docker ps
-
-            echo '--- compose status ---'
+            echo '✅ Deployment complete!'
             docker compose ps
-
-            echo '--- logs (tail) ---'
-            docker compose logs --tail=50
           "
