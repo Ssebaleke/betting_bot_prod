@@ -79,6 +79,7 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
     client = MakyPayClient(
         base_url=provider.base_url,
         secret_key=config.secret_key,
+        public_key=config.public_key,
     )
 
     # Use integer for UGX if no decimals
