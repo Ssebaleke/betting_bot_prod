@@ -53,17 +53,25 @@ def get_package(package_id):
 
 @sync_to_async
 def ensure_telegram_profile(telegram_id, username):
-    profile, created = TelegramProfile.objects.get_or_create(
-        telegram_id=telegram_id,
-        defaults={"username": username},
-    )
-    if not profile.user:
+    try:
+        profile = TelegramProfile.objects.get(telegram_id=telegram_id)
+        if not profile.user:
+            user = User.objects.create_user(
+                username=f"tg_{telegram_id}",
+                first_name=username or "User",
+            )
+            profile.user = user
+            profile.save()
+    except TelegramProfile.DoesNotExist:
         user = User.objects.create_user(
             username=f"tg_{telegram_id}",
             first_name=username or "User",
         )
-        profile.user = user
-        profile.save()
+        profile = TelegramProfile.objects.create(
+            telegram_id=telegram_id,
+            username=username,
+            user=user,
+        )
     return profile
 
 
