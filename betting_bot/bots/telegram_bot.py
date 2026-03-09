@@ -53,10 +53,17 @@ def get_package(package_id):
 
 @sync_to_async
 def ensure_telegram_profile(telegram_id, username):
-    profile, _ = TelegramProfile.objects.get_or_create(
+    profile, created = TelegramProfile.objects.get_or_create(
         telegram_id=telegram_id,
         defaults={"username": username},
     )
+    if created and not profile.user:
+        user = User.objects.create_user(
+            username=f"tg_{telegram_id}",
+            first_name=username or "User",
+        )
+        profile.user = user
+        profile.save()
     return profile
 
 
@@ -132,23 +139,26 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_user = update.effective_user
     telegram_id = telegram_user.id
 
-    await ensure_telegram_profile(telegram_id, telegram_user.username)
-
+    profile = await ensure_telegram_profile(telegram_id, telegram_user.username)
     package = await get_package(context.user_data["package_id"])
 
-    # Initiate payment (USSD push)
-    await sync_to_async(initiate_payment)(
-        phone=phone,
-        package=package,
-        telegram_id=telegram_id,
-    )
-
-    await update.message.reply_text(
-        "📲 *Payment request sent!*\n\n"
-        "Please approve the payment on your phone.\n"
-        "⏳ Waiting for confirmation...",
-        parse_mode="Markdown",
-    )
+    try:
+        await sync_to_async(initiate_payment)(
+            user=profile.user,
+            package=package,
+            phone=phone,
+        )
+        await update.message.reply_text(
+            "📲 *Payment request sent!*\n\n"
+            "Please approve the payment on your phone.\n"
+            "⏳ Waiting for confirmation...",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Payment failed: {str(e)}\n\n"
+            "Please try again or contact support."
+        )
 
     context.user_data.clear()
 

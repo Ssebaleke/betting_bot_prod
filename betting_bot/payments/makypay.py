@@ -64,10 +64,18 @@ class MakyPayClient:
             "Content-Type": "application/json",
         }
 
+        print(f"\n=== MakyPay Request ===")
+        print(f"URL: {url}")
+        print(f"Payload: {payload}")
+        print(f"Headers: Authorization: Bearer {self.secret_key[:10]}...")
+
         try:
             # ✅ prevents long hangs that trigger gunicorn WORKER TIMEOUT
             r = requests.post(url, json=payload, headers=headers, timeout=(5, 25))
+            print(f"Response Status: {r.status_code}")
+            print(f"Response Body: {r.text}")
         except requests.RequestException as e:
+            print(f"Request Exception: {e}")
             raise ValueError(f"MakyPay request failed: {e}")
 
         if r.status_code >= 400:

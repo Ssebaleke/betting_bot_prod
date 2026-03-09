@@ -103,10 +103,10 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
 @transaction.atomic
 def confirm_payment(reference: str, external_reference: str | None = None) -> Payment:
     """
-    Webhook confirms payment.
-    Only marks SUCCESS here to avoid breaking your existing subscription logic.
-    (We will link it to Subscription app after you show Subscription model.)
+    Webhook confirms payment and creates subscription.
     """
+    from subscription.models import Subscription
+    
     payment = Payment.objects.select_for_update().get(reference=reference)
 
     # idempotent
@@ -118,5 +118,12 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     payment.save(update_fields=["status", "external_reference"])
 
     logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
+
+    # Create subscription
+    Subscription.objects.create(
+        user=payment.user,
+        package=payment.package,
+    )
+    logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
     return payment
