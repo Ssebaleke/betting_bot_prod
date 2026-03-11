@@ -82,25 +82,43 @@ def makypay_webhook(request):
 
     logger.info(f"MakyPay webhook payload: {payload}")
     
-    reference = payload.get("reference")
-    status = (payload.get("status") or "").lower().strip()
-    external_reference = payload.get("external_reference")
+    # MakyPay sends data in nested structure
+    transaction = payload.get("transaction", {})
+    event_type = payload.get("event_type", "")
+    
+    reference = transaction.get("reference")
+    status = (transaction.get("status") or "").lower().strip()
+    external_reference = transaction.get("uuid")  # MakyPay's transaction UUID
 
     if not reference or not status:
         logger.warning(f"Missing fields in webhook: reference={reference}, status={status}")
         return HttpResponseBadRequest("Missing required fields: reference, status")
+    
+    logger.info(f"Processing webhook: event={event_type}, reference={reference}, status={status}")
 
-    if status not in SUCCESS_STATUSES:
+    # Handle success events
+    if status in SUCCESS_STATUSES or event_type == "collection.completed":
+        try:
+            confirm_payment(reference=reference, external_reference=external_reference)
+            logger.info(f"Payment confirmed: {reference}")
+        except Payment.DoesNotExist:
+            logger.error(f"Unknown reference: {reference}")
+            return JsonResponse({"success": False, "error": "Unknown reference"}, status=404)
+        except Exception as e:
+            logger.error(f"Error confirming payment: {e}")
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+        
+        return JsonResponse({"success": True})
+    
+    # Handle failed events
+    elif status == "failed" or event_type == "collection.failed":
+        logger.info(f"Payment failed: {reference}")
+        return JsonResponse({"message": "Payment failed", "status": "acknowledged"}, status=200)
+    
+    # Ignore other statuses
+    else:
+        logger.info(f"Ignoring status: {status}")
         return JsonResponse({"message": "Ignored"}, status=200)
-
-    try:
-        confirm_payment(reference=reference, external_reference=external_reference)
-    except Payment.DoesNotExist:
-        return JsonResponse({"success": False, "error": "Unknown reference"}, status=404)
-    except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
-
-    return JsonResponse({"success": True})
 
 
 def payment_status(request, reference):
