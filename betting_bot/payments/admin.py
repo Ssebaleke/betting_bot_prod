@@ -25,7 +25,7 @@ class PaymentProviderConfigAdmin(admin.ModelAdmin):
 class PaymentAdmin(admin.ModelAdmin):
     list_display = (
         "reference",
-        "user",
+        "user_info",
         "package",
         "phone",
         "amount",
@@ -35,6 +35,19 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ("status", "provider", "created_at")
     search_fields = ("reference", "phone", "user__username")
     readonly_fields = ("reference", "created_at")
+    
+    def user_info(self, obj):
+        try:
+            telegram_profile = obj.user.telegramprofile
+            telegram_username = telegram_profile.username or 'N/A'
+            return format_html(
+                '<strong>{}</strong><br/><small>@{}</small>',
+                obj.user.username,
+                telegram_username
+            )
+        except:
+            return obj.user.username
+    user_info.short_description = 'User'
     
     def colored_status(self, obj):
         colors = {
