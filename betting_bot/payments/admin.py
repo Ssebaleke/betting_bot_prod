@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import (
     PaymentProvider,
     PaymentProviderConfig,
@@ -28,9 +29,23 @@ class PaymentAdmin(admin.ModelAdmin):
         "package",
         "phone",
         "amount",
-        "status",
+        "colored_status",
         "created_at",
     )
     list_filter = ("status", "provider", "created_at")
     search_fields = ("reference", "phone", "user__username")
     readonly_fields = ("reference", "created_at")
+    
+    def colored_status(self, obj):
+        colors = {
+            Payment.STATUS_SUCCESS: 'green',
+            Payment.STATUS_FAILED: 'red',
+            Payment.STATUS_PENDING: 'orange',
+        }
+        color = colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    colored_status.short_description = 'Status'
