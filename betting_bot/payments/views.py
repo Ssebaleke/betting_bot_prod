@@ -112,7 +112,14 @@ def makypay_webhook(request):
     
     # Handle failed events
     elif status == "failed" or event_type == "collection.failed":
-        logger.info(f"Payment failed: {reference}")
+        try:
+            payment = Payment.objects.get(reference=reference)
+            payment.status = Payment.STATUS_FAILED
+            payment.external_reference = external_reference
+            payment.save()
+            logger.info(f"Payment marked as failed: {reference}")
+        except Payment.DoesNotExist:
+            logger.error(f"Unknown reference for failed payment: {reference}")
         return JsonResponse({"message": "Payment failed", "status": "acknowledged"}, status=200)
     
     # Ignore other statuses
