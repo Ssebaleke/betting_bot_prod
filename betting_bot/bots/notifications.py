@@ -20,34 +20,42 @@ def get_bot_instance():
 def send_telegram_message(telegram_id: int, message: str, parse_mode: str = "Markdown"):
     """Send a message to a Telegram user (sync version)"""
     import asyncio
+    import threading
     
-    async def _send():
-        try:
-            bot = get_bot_instance()
-            if not bot:
+    result = [False]  # Use list to store result from thread
+    
+    def run_in_thread():
+        async def _send():
+            try:
+                bot = get_bot_instance()
+                if not bot:
+                    return False
+                
+                await bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode=parse_mode
+                )
+                logger.info(f"Notification sent to telegram_id={telegram_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
                 return False
-            
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=message,
-                parse_mode=parse_mode
-            )
-            logger.info(f"Notification sent to telegram_id={telegram_id}")
-            return True
+        
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result[0] = loop.run_until_complete(_send())
+            loop.close()
         except Exception as e:
-            logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
-            return False
+            logger.error(f"Error in async send: {e}")
     
-    try:
-        # Run in new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(_send())
-        loop.close()
-        return result
-    except Exception as e:
-        logger.error(f"Error in send_telegram_message: {e}")
-        return False
+    # Run in separate thread to avoid event loop conflicts
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    thread.join(timeout=10)  # Wait max 10 seconds
+    
+    return result[0]
 
 
 def notify_payment_success(user, package, payment):
