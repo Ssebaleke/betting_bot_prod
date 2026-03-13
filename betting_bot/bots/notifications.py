@@ -3,7 +3,6 @@ Telegram notification utilities
 """
 import logging
 from telegram import Bot
-from asgiref.sync import async_to_sync
 from bots.models import TelegramBotConfig
 
 logger = logging.getLogger(__name__)
@@ -18,23 +17,36 @@ def get_bot_instance():
     return Bot(token=bot_config.bot_token.strip())
 
 
-@async_to_sync
-async def send_telegram_message(telegram_id: int, message: str, parse_mode: str = "Markdown"):
-    """Send a message to a Telegram user"""
-    try:
-        bot = get_bot_instance()
-        if not bot:
+def send_telegram_message(telegram_id: int, message: str, parse_mode: str = "Markdown"):
+    """Send a message to a Telegram user (sync version)"""
+    import asyncio
+    
+    async def _send():
+        try:
+            bot = get_bot_instance()
+            if not bot:
+                return False
+            
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode=parse_mode
+            )
+            logger.info(f"Notification sent to telegram_id={telegram_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
             return False
-        
-        await bot.send_message(
-            chat_id=telegram_id,
-            text=message,
-            parse_mode=parse_mode
-        )
-        logger.info(f"Notification sent to telegram_id={telegram_id}")
-        return True
+    
+    try:
+        # Run in new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(_send())
+        loop.close()
+        return result
     except Exception as e:
-        logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
+        logger.error(f"Error in send_telegram_message: {e}")
         return False
 
 
