@@ -101,6 +101,15 @@ def makypay_webhook(request):
         try:
             confirm_payment(reference=reference, external_reference=external_reference)
             logger.info(f"Payment confirmed: {reference}")
+            
+            # Send success notification
+            try:
+                from bots.notifications import notify_payment_success
+                payment = Payment.objects.get(reference=reference)
+                notify_payment_success(payment.user, payment.package, payment)
+            except Exception as e:
+                logger.error(f"Failed to send success notification: {e}")
+                
         except Payment.DoesNotExist:
             logger.error(f"Unknown reference: {reference}")
             return JsonResponse({"success": False, "error": "Unknown reference"}, status=404)
@@ -118,6 +127,14 @@ def makypay_webhook(request):
             payment.external_reference = external_reference
             payment.save()
             logger.info(f"Payment marked as failed: {reference}")
+            
+            # Send failure notification
+            try:
+                from bots.notifications import notify_payment_failed
+                notify_payment_failed(payment.user, payment.package, payment)
+            except Exception as e:
+                logger.error(f"Failed to send failure notification: {e}")
+                
         except Payment.DoesNotExist:
             logger.error(f"Unknown reference for failed payment: {reference}")
         return JsonResponse({"message": "Payment failed", "status": "acknowledged"}, status=200)
