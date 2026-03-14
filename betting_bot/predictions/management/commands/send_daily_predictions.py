@@ -35,14 +35,16 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Sending predictions for {target_date} at {current_time.strftime('%H:%M')}...")
 
+        # Only get predictions that haven't been sent yet
         predictions = Prediction.objects.filter(
             is_active=True,
+            is_sent=False,
             send_date=target_date,
             send_time__lte=current_time,
         ).select_related('package').order_by('package', 'match_time')
 
         if not predictions.exists():
-            self.stdout.write(self.style.WARNING(f"No predictions found for {target_date}"))
+            self.stdout.write(self.style.WARNING(f"No unsent predictions found for {target_date}"))
             return
 
         # Group predictions by package
@@ -88,6 +90,9 @@ class Command(BaseCommand):
             except Exception as e:
                 failed_count += 1
                 logger.error(f"Error sending to {subscription.user.username}: {e}")
+
+        # Mark predictions as sent so they don't get sent again
+        predictions.update(is_sent=True)
 
         self.stdout.write(self.style.SUCCESS(
             f"\n📊 Summary:\n"

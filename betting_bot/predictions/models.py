@@ -35,6 +35,7 @@ class Prediction(models.Model):
         help_text="Which package receives this prediction"
     )
     is_active = models.BooleanField(default=True)
+    is_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

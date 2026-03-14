@@ -15,6 +15,7 @@ class PredictionAdmin(admin.ModelAdmin):
         "send_time",
         "package",
         "is_active",
+        "is_sent",
     )
     list_filter = ("package", "is_active", "send_date", "match_date")
     search_fields = ("home_team", "away_team", "prediction")

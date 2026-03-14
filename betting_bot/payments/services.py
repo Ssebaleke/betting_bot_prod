@@ -121,10 +121,59 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
 
     # Create subscription
-    Subscription.objects.create(
+    subscription = Subscription.objects.create(
         user=payment.user,
         package=payment.package,
     )
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
+    # Send today's predictions if already sent for this package
+    try:
+        from predictions.models import Prediction
+        from bots.notifications import send_telegram_message
+
+        today_predictions = Prediction.objects.filter(
+            is_active=True,
+            is_sent=True,
+            send_date=timezone.now().date(),
+            package=payment.package,
+        ).order_by('match_time')
+
+        if today_predictions.exists():
+            telegram_profile = payment.user.telegramprofile
+            message = _build_predictions_message(
+                list(today_predictions),
+                payment.package.name,
+                timezone.now().date()
+            )
+            send_telegram_message(telegram_profile.telegram_id, message)
+            logger.info("Sent today's predictions to new subscriber user=%s", payment.user.id)
+    except Exception as e:
+        logger.error("Failed to send predictions to new subscriber: %s", e)
+
     return payment
+
+
+def _build_predictions_message(predictions, package_name, date):
+    message = (
+        f"🔥 *TODAY'S PREDICTIONS* 🔥\n"
+        f"📅 {date.strftime('%A, %B %d, %Y')}\n"
+        f"📦 Package: {package_name}\n\n"
+    )
+    total_odds = 1
+    for i, pred in enumerate(predictions, 1):
+        total_odds *= float(pred.odds)
+        message += (
+            f"*{i}. {pred.home_team} vs {pred.away_team}*\n"
+            f"⏰ {pred.match_time.strftime('%H:%M')}\n"
+            f"🎯 Prediction: *{pred.prediction}*\n"
+            f"💰 Odds: *{pred.odds}*\n\n"
+        )
+    message += (
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"🎰 *Total Combined Odds: {total_odds:.2f}*\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"💡 *Bet Responsibly*\n"
+        f"Good luck! 🍀"
+    )
+    return message
