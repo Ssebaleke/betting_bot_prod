@@ -63,9 +63,14 @@ class Command(BaseCommand):
 
         sent_count = 0
         failed_count = 0
+        notified_users = set()  # Track already notified users
 
         for subscription in active_subscriptions:
             try:
+                # Skip if user already notified
+                if subscription.user.id in notified_users:
+                    continue
+
                 # Get predictions for user's package
                 package_predictions = predictions_by_package.get(subscription.package.name, [])
                 
@@ -81,6 +86,7 @@ class Command(BaseCommand):
 
                 if success:
                     sent_count += 1
+                    notified_users.add(subscription.user.id)
                     self.stdout.write(self.style.SUCCESS(
                         f"✓ Sent to {subscription.user.username} ({subscription.package.name})"
                     ))
@@ -108,9 +114,11 @@ class Command(BaseCommand):
             f"📦 Package: {package_name}\n\n"
         )
 
+        total_odds = 1
         for i, pred in enumerate(predictions, 1):
             fixture = pred.fixture
             match_time = fixture.start_time.strftime('%H:%M') if fixture.start_time else 'TBD'
+            total_odds *= float(pred.odds_value)
             
             message += (
                 f"*{i}. {fixture.home_team} vs {fixture.away_team}*\n"
@@ -121,9 +129,11 @@ class Command(BaseCommand):
             )
 
         message += (
-            "━━━━━━━━━━━━━━━━━\n"
-            "💡 *Bet Responsibly*\n"
-            "Good luck! 🍀"
+            f"━━━━━━━━━━━━━━━━━\n"
+            f"🎰 *Total Combined Odds: {total_odds:.2f}*\n"
+            f"━━━━━━━━━━━━━━━━━\n"
+            f"💡 *Bet Responsibly*\n"
+            f"Good luck! 🍀"
         )
 
         return message
