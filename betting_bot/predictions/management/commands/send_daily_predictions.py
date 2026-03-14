@@ -110,7 +110,7 @@ class Command(BaseCommand):
 
         for i, pred in enumerate(predictions, 1):
             fixture = pred.fixture
-            match_time = fixture.match_time.strftime('%H:%M') if fixture.match_time else 'TBD'
+            match_time = fixture.start_time.strftime('%H:%M') if fixture.start_time else 'TBD'
             
             message += (
                 f"*{i}. {fixture.home_team} vs {fixture.away_team}*\n"
