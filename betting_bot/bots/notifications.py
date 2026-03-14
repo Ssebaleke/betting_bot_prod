@@ -2,60 +2,44 @@
 Telegram notification utilities
 """
 import logging
-from telegram import Bot
+import requests
 from bots.models import TelegramBotConfig
 
 logger = logging.getLogger(__name__)
 
 
-def get_bot_instance():
-    """Get active Telegram bot instance"""
+def get_bot_token():
+    """Get active Telegram bot token"""
     bot_config = TelegramBotConfig.objects.filter(is_active=True).first()
     if not bot_config:
         logger.error("No active Telegram bot configured")
         return None
-    return Bot(token=bot_config.bot_token.strip())
+    return bot_config.bot_token.strip()
 
 
 def send_telegram_message(telegram_id: int, message: str, parse_mode: str = "Markdown"):
-    """Send a message to a Telegram user (sync version)"""
-    import asyncio
-    import threading
-    
-    result = [False]  # Use list to store result from thread
-    
-    def run_in_thread():
-        async def _send():
-            try:
-                bot = get_bot_instance()
-                if not bot:
-                    return False
-                
-                await bot.send_message(
-                    chat_id=telegram_id,
-                    text=message,
-                    parse_mode=parse_mode
-                )
-                logger.info(f"Notification sent to telegram_id={telegram_id}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
-                return False
+    """Send a message to a Telegram user using requests (no async)"""
+    try:
+        token = get_bot_token()
+        if not token:
+            return False
         
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result[0] = loop.run_until_complete(_send())
-            loop.close()
-        except Exception as e:
-            logger.error(f"Error in async send: {e}")
-    
-    # Run in separate thread to avoid event loop conflicts
-    thread = threading.Thread(target=run_in_thread)
-    thread.start()
-    thread.join(timeout=10)  # Wait max 10 seconds
-    
-    return result[0]
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        response = requests.post(url, json={
+            "chat_id": telegram_id,
+            "text": message,
+            "parse_mode": parse_mode
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"Notification sent to telegram_id={telegram_id}")
+            return True
+        else:
+            logger.error(f"Failed to send notification: {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to send notification to telegram_id={telegram_id}: {e}")
+        return False
 
 
 def notify_payment_success(user, package, payment):
