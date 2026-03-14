@@ -34,14 +34,14 @@ class Command(BaseCommand):
         self.stdout.write(f"Sending predictions for {target_date}...")
 
         # Get today's predictions
-        start_of_day = datetime.combine(target_date, datetime.min.time())
-        end_of_day = datetime.combine(target_date, datetime.max.time())
+        start_of_day = timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
+        end_of_day = timezone.make_aware(datetime.combine(target_date, datetime.max.time()))
 
         predictions = Prediction.objects.filter(
             is_active=True,
             publish_at__gte=start_of_day,
             publish_at__lte=end_of_day,
-        ).select_related('fixture', 'market', 'package').order_by('package', 'fixture__match_time')
+        ).select_related('fixture', 'market', 'package').order_by('package', 'fixture__start_time')
 
         if not predictions.exists():
             self.stdout.write(self.style.WARNING(f"No predictions found for {target_date}"))
