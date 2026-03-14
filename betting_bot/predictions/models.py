@@ -19,19 +19,22 @@ class Prediction(models.Model):
         help_text="Match kick-off time"
     )
     match_date = models.DateField(
+        help_text="Date match is played"
+    )
+    send_date = models.DateField(
         default=timezone.now,
-        help_text="Date of the match"
+        help_text="Date to send this prediction to subscribers (can be before match day)"
     )
     package = models.ForeignKey(
         Package,
         on_delete=models.CASCADE,
-        help_text="Which package can see this prediction"
+        help_text="Which package receives this prediction"
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ('match_date', 'match_time')
+        ordering = ('send_date', 'match_time')
 
     def __str__(self):
-        return f"{self.home_team} vs {self.away_team} | {self.prediction} | {self.match_date}"
+        return f"{self.home_team} vs {self.away_team} | {self.prediction} | Send: {self.send_date}"

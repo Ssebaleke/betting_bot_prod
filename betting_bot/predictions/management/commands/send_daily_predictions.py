@@ -35,7 +35,7 @@ class Command(BaseCommand):
 
         predictions = Prediction.objects.filter(
             is_active=True,
-            match_date=target_date,
+            send_date=target_date,
         ).select_related('package').order_by('package', 'match_time')
 
         if not predictions.exists():
