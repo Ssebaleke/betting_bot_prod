@@ -26,12 +26,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         now = timezone.now()
+        local_now = timezone.localtime(now)  # Convert to Uganda time (EAT)
         target_date = (
             datetime.strptime(options['date'], '%Y-%m-%d').date()
             if options['date']
-            else now.date()
+            else local_now.date()
         )
-        current_time = now.time()
+        current_time = local_now.time()  # Use local time for comparison
 
         self.stdout.write(f"Sending predictions for {target_date} at {current_time.strftime('%H:%M')}...")
 
