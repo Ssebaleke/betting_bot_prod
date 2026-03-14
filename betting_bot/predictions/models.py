@@ -25,6 +25,10 @@ class Prediction(models.Model):
         default=timezone.now,
         help_text="Date to send this prediction to subscribers (can be before match day)"
     )
+    send_time = models.TimeField(
+        default="08:00",
+        help_text="Time to send this prediction to subscribers"
+    )
     package = models.ForeignKey(
         Package,
         on_delete=models.CASCADE,

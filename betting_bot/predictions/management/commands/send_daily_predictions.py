@@ -25,17 +25,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        now = timezone.now()
         target_date = (
             datetime.strptime(options['date'], '%Y-%m-%d').date()
             if options['date']
-            else timezone.now().date()
+            else now.date()
         )
+        current_time = now.time()
 
-        self.stdout.write(f"Sending predictions for {target_date}...")
+        self.stdout.write(f"Sending predictions for {target_date} at {current_time.strftime('%H:%M')}...")
 
         predictions = Prediction.objects.filter(
             is_active=True,
             send_date=target_date,
+            send_time__lte=current_time,
         ).select_related('package').order_by('package', 'match_time')
 
         if not predictions.exists():
