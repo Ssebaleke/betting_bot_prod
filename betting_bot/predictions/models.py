@@ -1,59 +1,37 @@
 from django.db import models
 from django.utils import timezone
-
-from odds.models import Fixture, Market
 from packages.models import Package
 
 
 class Prediction(models.Model):
-    SOURCE_CHOICES = (
-        ("manual", "Manual"),
-        ("logic", "Rule-based"),
-        ("external", "External"),
-    )
 
-    fixture = models.ForeignKey(
-        Fixture,
-        on_delete=models.CASCADE,
-        related_name="predictions",
+    home_team = models.CharField(max_length=100)
+    away_team = models.CharField(max_length=100)
+    prediction = models.CharField(
+        max_length=100,
+        help_text="e.g. Arsenal to win, Over 2.5, BTTS Yes"
     )
-
-    market = models.ForeignKey(
-        Market,
-        on_delete=models.CASCADE,
-    )
-
-    selection = models.CharField(
-        max_length=50,
-        help_text="Chosen outcome (e.g. Chelsea, Over 2.5)",
-    )
-
-    odds_value = models.DecimalField(
+    odds = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        help_text="Odds at the time of publishing",
     )
-
+    match_time = models.TimeField(
+        help_text="Match kick-off time"
+    )
+    match_date = models.DateField(
+        default=timezone.now,
+        help_text="Date of the match"
+    )
     package = models.ForeignKey(
         Package,
         on_delete=models.CASCADE,
-        help_text="Which package can see this prediction",
+        help_text="Which package can see this prediction"
     )
-
-    source = models.CharField(
-        max_length=20,
-        choices=SOURCE_CHOICES,
-        default="manual",
-    )
-
     is_active = models.BooleanField(default=True)
-
-    publish_at = models.DateTimeField(default=timezone.now)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ("-publish_at",)
+        ordering = ('match_date', 'match_time')
 
     def __str__(self):
-        return f"{self.fixture} | {self.selection} ({self.package.name})"
+        return f"{self.home_team} vs {self.away_team} | {self.prediction} | {self.match_date}"
