@@ -8,37 +8,219 @@
   <h1>📱 SMS Credits</h1>
 </div>
 
-<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; max-width:800px;">
-  <div class="card">
-    <div style="font-size:14px; font-weight:700; margin-bottom:16px;">Current SMS Config</div>
-    {% if config %}
-    <div style="display:flex; flex-direction:column; gap:12px;">
-      <div>
-        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px;">API Key</div>
-        <div style="font-family:monospace; font-size:13px; background:var(--surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
-          {{ config.api_key|slice:":8" }}••••••••••••
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px;">Status</div>
-        <span class="badge badge-green">Active</span>
-      </div>
-    </div>
-    {% else %}
-    <div style="color:var(--muted); font-size:14px;">No SMS config set up yet. Contact your developer to configure UGSMS.</div>
-    {% endif %}
+<!-- BALANCE CARDS -->
+<div class="stat-grid" style="max-width:800px;">
+  <div class="stat-card {% if balance.credits == 0 %}red{% elif balance.credits < 50 %}orange{% else %}green{% endif %}">
+    <div class="stat-label">Credits Remaining</div>
+    <div class="stat-value">{{ balance.credits }}</div>
+    <div class="stat-sub">SMS messages available</div>
   </div>
-
-  <div class="card">
-    <div style="font-size:14px; font-weight:700; margin-bottom:16px;">Buy SMS Credits</div>
-    <p style="color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:16px;">
-      To top up your SMS credits, contact us directly. We'll recharge your UGSMS account and update the API key if needed.
-    </p>
-    <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px;">
-      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Contact Developer</div>
-      <div style="font-size:14px; font-weight:600;">📞 +256 XXX XXX XXX</div>
-      <div style="font-size:14px; font-weight:600; margin-top:4px;">✉️ admin@bettipspro.com</div>
-    </div>
+  <div class="stat-card gold">
+    <div class="stat-label">Price Per SMS</div>
+    <div class="stat-value">UGX {{ balance.price_per_sms|floatformat:0 }}</div>
+    <div class="stat-sub">Per message sent</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-label">Total Spent</div>
+    <div class="stat-value">UGX {{ total_spent|floatformat:0 }}</div>
+    <div class="stat-sub">All time top-ups</div>
   </div>
 </div>
+
+{% if balance.credits == 0 %}
+<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:8px;padding:14px 18px;margin-bottom:24px;max-width:800px;color:var(--danger);font-size:14px;">
+  ⚠️ <strong>No SMS credits remaining.</strong> Top up below to continue sending predictions.
+</div>
+{% elif balance.credits < 50 %}
+<div style="background:rgba(255,152,0,.1);border:1px solid rgba(255,152,0,.3);border-radius:8px;padding:14px 18px;margin-bottom:24px;max-width:800px;color:var(--warning);font-size:14px;">
+  ⚠️ <strong>Low balance — {{ balance.credits }} credits left.</strong> Top up soon.
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px;margin-bottom:24px;">
+
+  <!-- BUY CREDITS -->
+  <div class="card">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🛒 Buy SMS Credits</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px;">Pay via Mobile Money — credits added instantly on confirmation.</div>
+
+    <div id="buyForm">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Amount (UGX)</label>
+        <input type="number" id="buyAmount" placeholder="e.g. 10000" min="1000" step="500"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="creditPreview"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px;">
+        <label>Mobile Money Number</label>
+        <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+          <div style="background:var(--surface);padding:0 12px;display:flex;align-items:center;font-size:13px;color:var(--muted);border-right:1px solid var(--border);">🇺🇬 +256</div>
+          <input type="tel" id="buyPhone" placeholder="7XXXXXXXX" maxlength="9" style="border:none;border-radius:0;"/>
+        </div>
+      </div>
+      <div id="buyError" style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none;"></div>
+      <button class="btn btn-green" style="width:100%;" onclick="initiateBuy()" id="buyBtn">Pay via Mobile Money</button>
+    </div>
+
+    <div id="buyPending" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">📲</div>
+      <div style="font-weight:700;margin-bottom:6px;">USSD Prompt Sent!</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">Approve the payment on your phone to add credits.</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;">
+        <span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(122,128,153,.3);border-top-color:var(--muted);border-radius:50%;animation:spin .7s linear infinite;"></span>
+        Waiting for confirmation…
+      </div>
+    </div>
+
+    <div id="buySuccess" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">✅</div>
+      <div style="font-weight:700;color:var(--green);margin-bottom:6px;">Payment Confirmed!</div>
+      <div style="font-size:13px;color:var(--muted);" id="creditsAdded"></div>
+      <button class="btn btn-outline" style="margin-top:16px;" onclick="location.reload()">Refresh Balance</button>
+    </div>
+
+    <div id="buyFailed" style="display:none;text-align:center;padding:20px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">❌</div>
+      <div style="font-weight:700;color:var(--danger);margin-bottom:6px;">Payment Failed</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;" id="failedReason"></div>
+      <button class="btn btn-outline" onclick="resetBuyForm()">Try Again</button>
+    </div>
+  </div>
+
+  <!-- SET PRICE -->
+  <div class="card">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">💰 SMS Price Setting</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px;">Set how much each SMS costs. This determines how many credits you get per payment.</div>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Price Per SMS (UGX)</label>
+        <input type="number" name="price_per_sms" value="{{ balance.price_per_sms|floatformat:0 }}" min="1" step="1" required/>
+      </div>
+      <button type="submit" class="btn btn-green" style="width:100%;">Update Price</button>
+    </form>
+  </div>
+</div>
+
+<!-- TOP-UP HISTORY -->
+<div class="card" style="max-width:800px;">
+  <div style="font-size:14px;font-weight:700;margin-bottom:16px;">📋 Top-Up History</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Credits Added</th><th>Amount Paid</th><th>Phone</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for t in topups %}
+        <tr>
+          <td><span class="badge badge-green">+{{ t.credits_added }}</span></td>
+          <td>UGX {{ t.amount_paid|floatformat:0 }}</td>
+          <td style="color:var(--muted);">{{ t.phone }}</td>
+          <td>
+            {% if t.status == "SUCCESS" %}<span class="badge badge-green">Confirmed</span>
+            {% elif t.status == "PENDING" %}<span class="badge badge-orange">Pending</span>
+            {% else %}<span class="badge badge-red">Failed</span>{% endif %}
+          </td>
+          <td style="color:var(--muted);">{{ t.created_at|date:"M d, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:24px;">No top-ups yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+<script>
+  let pollTimer = null;
+  let currentRef = null;
+
+  const pricePerSms = {{ balance.price_per_sms|floatformat:0 }};
+
+  document.getElementById("buyAmount").addEventListener("input", function() {
+    const amt = parseInt(this.value) || 0;
+    const credits = pricePerSms > 0 ? Math.floor(amt / pricePerSms) : 0;
+    document.getElementById("creditPreview").textContent = pricePerSms > 0
+      ? `≈ ${credits} SMS credits`
+      : "Set a price per SMS first";
+  });
+
+  function initiateBuy() {
+    const amount = document.getElementById("buyAmount").value.trim();
+    const rawPhone = document.getElementById("buyPhone").value.trim();
+    const phone = rawPhone.replace(/^0+/, "");
+
+    if (!amount || parseInt(amount) < 1000) { showBuyError("Enter a valid amount (min UGX 1,000)"); return; }
+    if (!/^[7][0-9]{8}$/.test(phone)) { showBuyError("Enter a valid Uganda mobile number e.g. 701234567"); return; }
+
+    const btn = document.getElementById("buyBtn");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    hideBuyError();
+
+    fetch("{% url 'dashboard:sms_topup_pay' %}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": "{{ csrf_token }}" },
+      body: JSON.stringify({ phone: "256" + phone, amount: parseInt(amount) })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        currentRef = data.reference;
+        document.getElementById("buyForm").style.display = "none";
+        document.getElementById("buyPending").style.display = "block";
+        startPoll();
+      } else {
+        showBuyError(data.error || "Payment initiation failed.");
+        btn.disabled = false;
+        btn.textContent = "Pay via Mobile Money";
+      }
+    })
+    .catch(() => {
+      showBuyError("Network error. Please try again.");
+      btn.disabled = false;
+      btn.textContent = "Pay via Mobile Money";
+    });
+  }
+
+  function startPoll() {
+    let attempts = 0;
+    pollTimer = setInterval(() => {
+      attempts++;
+      fetch("/pay/status/" + currentRef + "/")
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === "SUCCESS") {
+            clearInterval(pollTimer);
+            document.getElementById("buyPending").style.display = "none";
+            document.getElementById("creditsAdded").textContent = data.credits_added
+              ? `${data.credits_added} credits added to your account.`
+              : "Credits added to your account.";
+            document.getElementById("buySuccess").style.display = "block";
+          } else if (data.status === "FAILED") {
+            clearInterval(pollTimer);
+            document.getElementById("buyPending").style.display = "none";
+            document.getElementById("failedReason").textContent = "The payment was declined or cancelled.";
+            document.getElementById("buyFailed").style.display = "block";
+          } else if (attempts >= 24) {
+            clearInterval(pollTimer);
+            document.getElementById("buyPending").style.display = "none";
+            document.getElementById("failedReason").textContent = "Timed out. If you approved it, credits will be added shortly.";
+            document.getElementById("buyFailed").style.display = "block";
+          }
+        });
+    }, 5000);
+  }
+
+  function resetBuyForm() {
+    document.getElementById("buyFailed").style.display = "none";
+    document.getElementById("buyForm").style.display = "block";
+    document.getElementById("buyBtn").disabled = false;
+    document.getElementById("buyBtn").textContent = "Pay via Mobile Money";
+  }
+
+  function showBuyError(msg) {
+    const el = document.getElementById("buyError");
+    el.textContent = msg; el.style.display = "block";
+  }
+  function hideBuyError() { document.getElementById("buyError").style.display = "none"; }
+</script>
 {% endblock %}

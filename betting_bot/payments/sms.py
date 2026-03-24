@@ -36,6 +36,13 @@ def send_sms(phone: str, message: str) -> bool:
 
     phone = _normalize_phone(phone)
 
+    # Check and deduct balance
+    from payments.models import SMSBalance
+    balance = SMSBalance.get()
+    if not balance.deduct():
+        logger.error("SMS not sent to %s — zero credits remaining.", phone)
+        return False
+
     try:
         resp = requests.post(
             UGSMS_URL,
@@ -47,8 +54,14 @@ def send_sms(phone: str, message: str) -> bool:
         if data.get("success"):
             logger.info("SMS sent to %s", phone)
             return True
+        # Refund credit if API rejected
+        balance.credits += 1
+        balance.save(update_fields=["credits", "updated_at"])
         logger.error("UGSMS error response: %s", data)
         return False
     except Exception as e:
+        # Refund credit on network error
+        balance.credits += 1
+        balance.save(update_fields=["credits", "updated_at"])
         logger.error("UGSMS request failed for %s: %s", phone, e)
         return False

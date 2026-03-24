@@ -238,6 +238,82 @@ def payments(request):
 
 @owner_required
 def sms_credits(request):
-    from payments.models import SMSConfig
-    config = SMSConfig.objects.filter(is_active=True).first()
-    return render(request, "dashboard/sms_credits.html", {"config": config})
+    from payments.models import SMSBalance, SMSTopUp
+    from django.db.models import Sum
+    balance = SMSBalance.get()
+    topups = SMSTopUp.objects.order_by("-created_at")[:20]
+    total_spent = SMSTopUp.objects.filter(status=SMSTopUp.STATUS_SUCCESS).aggregate(t=Sum("amount_paid"))["t"] or 0
+    return render(request, "dashboard/sms_credits.html", {
+        "balance": balance,
+        "topups": topups,
+        "total_spent": total_spent,
+    })
+
+
+@owner_required
+def sms_topup_pay(request):
+    import json, uuid
+    from decimal import Decimal
+    from payments.models import SMSBalance, SMSTopUp, YooPaymentProvider
+    from payments.yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
+    from payments.makypay import normalize_ug_phone
+
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST only"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+
+    phone = (data.get("phone") or "").strip()
+    amount = data.get("amount")
+
+    if not phone or not amount:
+        return JsonResponse({"success": False, "error": "Phone and amount required"}, status=400)
+
+    balance = SMSBalance.get()
+    if not balance.price_per_sms or balance.price_per_sms <= 0:
+        return JsonResponse({"success": False, "error": "SMS price not set. Contact developer."}, status=400)
+
+    amount = Decimal(str(amount))
+    credits_to_add = int(amount // balance.price_per_sms)
+    if credits_to_add < 1:
+        return JsonResponse({"success": False, "error": f"Minimum amount is UGX {int(balance.price_per_sms):,} for 1 credit."}, status=400)
+
+    reference = make_reference()
+
+    topup = SMSTopUp.objects.create(
+        phone=phone,
+        amount_paid=amount,
+        credits_added=credits_to_add,
+        payment_reference=reference,
+        status=SMSTopUp.STATUS_PENDING,
+    )
+
+    try:
+        provider = YooPaymentProvider.objects.filter(is_active=True).first()
+        if not provider:
+            topup.delete()
+            return JsonResponse({"success": False, "error": "No payment provider configured."}, status=400)
+
+        client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
+        result = client.collect(
+            phone=normalize_yoo_phone(phone),
+            amount=int(amount),
+            reference=reference,
+            notification_url=provider.notification_url,
+            failure_url=provider.failure_url,
+        )
+
+        if result.get("yoo_status") == "FAILED":
+            topup.status = SMSTopUp.STATUS_FAILED
+            topup.save(update_fields=["status"])
+            return JsonResponse({"success": False, "error": result.get("error_message") or "Payment rejected."}, status=400)
+
+    except Exception as e:
+        topup.status = SMSTopUp.STATUS_FAILED
+        topup.save(update_fields=["status"])
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    return JsonResponse({"success": True, "reference": reference, "credits": credits_to_add})

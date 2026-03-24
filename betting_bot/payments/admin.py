@@ -7,6 +7,8 @@ from django.urls import path
 from django.shortcuts import render
 from .models import (
     SMSConfig,
+    SMSBalance,
+    SMSTopUp,
     PaymentProvider,
     PaymentProviderConfig,
     YooPaymentProvider,
@@ -24,8 +26,34 @@ class SMSConfigAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(SMSBalance)
+class SMSBalanceAdmin(admin.ModelAdmin):
+    list_display = ("credits", "price_per_sms", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    def has_add_permission(self, request):
+        return not SMSBalance.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SMSTopUp)
+class SMSTopUpAdmin(admin.ModelAdmin):
+    list_display = ("phone", "amount_paid", "credits_added", "status", "created_at")
+    readonly_fields = ("phone", "amount_paid", "credits_added", "payment_reference", "status", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(PaymentProvider)
-class PaymentProviderAdmin(admin.ModelAdmin):
     list_display = ("name", "base_url", "is_active")
     list_editable = ("is_active",)
     search_fields = ("name",)

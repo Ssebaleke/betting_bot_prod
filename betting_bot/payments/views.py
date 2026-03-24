@@ -188,6 +188,19 @@ def yoo_ipn(request):
     try:
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
+            # Check if this is an SMS top-up reference first
+            from payments.models import SMSTopUp, SMSBalance
+            topup = SMSTopUp.objects.filter(payment_reference=reference).first()
+            if topup:
+                if topup.status == SMSTopUp.STATUS_SUCCESS:
+                    return HttpResponse("OK")
+                topup.status = SMSTopUp.STATUS_SUCCESS
+                topup.save(update_fields=["status"])
+                balance = SMSBalance.get()
+                balance.credits += topup.credits_added
+                balance.save(update_fields=["credits", "updated_at"])
+                return HttpResponse("OK")
+
             payment = Payment.objects.select_for_update().get(reference=reference)
             if payment.status == Payment.STATUS_SUCCESS:
                 return HttpResponse("OK")
@@ -230,6 +243,14 @@ def yoo_failure_ipn(request):
     try:
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
+            from payments.models import SMSTopUp
+            topup = SMSTopUp.objects.filter(payment_reference=reference).first()
+            if topup:
+                if topup.status == SMSTopUp.STATUS_PENDING:
+                    topup.status = SMSTopUp.STATUS_FAILED
+                    topup.save(update_fields=["status"])
+                return HttpResponse("OK")
+
             payment = Payment.objects.select_for_update().get(reference=reference)
             if payment.status != Payment.STATUS_PENDING:
                 return HttpResponse("OK")
@@ -249,6 +270,16 @@ def yoo_failure_ipn(request):
 
 
 def payment_status(request, reference):
+    from payments.models import SMSTopUp
+    topup = SMSTopUp.objects.filter(payment_reference=reference).first()
+    if topup:
+        return JsonResponse({
+            "success": True,
+            "reference": reference,
+            "status": topup.status,
+            "credits_added": topup.credits_added if topup.status == SMSTopUp.STATUS_SUCCESS else 0,
+        })
+
     try:
         payment = Payment.objects.get(reference=reference)
     except Payment.DoesNotExist:
