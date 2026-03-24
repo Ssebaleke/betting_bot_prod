@@ -13,23 +13,38 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > ~/.ssh/github_actions
+          chmod 600 ~/.ssh/github_actions
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy Application
+      - name: Deploy to VPS
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+          ssh -i ~/.ssh/github_actions ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
             set -e
-            cd ~/Bet-Bot
+            cd ~/betting_bot_prod
 
-            echo '📥 Pulling latest code...'
+            echo "📥 Pulling latest code..."
             git pull origin main
 
-            echo '🔄 Restarting containers...'
-            docker compose down
-            docker compose up -d --build
+            echo "🔨 Rebuilding containers..."
+            docker-compose build --no-cache web telegram_bot
 
-            echo '✅ Deployment complete!'
-            docker compose ps
-          "
+            echo "🔄 Restarting containers..."
+            docker-compose up -d
+
+            echo "⏳ Waiting for web container..."
+            sleep 15
+
+            echo "📦 Running migrations..."
+            docker exec bet-bot-web python manage.py migrate --noinput
+
+            echo "🗂️ Collecting static files..."
+            docker exec bet-bot-web python manage.py collectstatic --noinput
+
+            echo "✅ Deployment complete!"
+            docker-compose ps
+          EOF
+
+
+
+#hello
