@@ -44,6 +44,8 @@ jobs:
             docker exec bet-bot-web python manage.py collectstatic --noinput
 
             echo "✅ Deployment complete!"
+            docker network connect betting_bot_prod_default spotpay-deployment-nginx-1 || true
+            docker restart spotpay-deployment-nginx-1
             docker-compose ps
           EOF
 
