@@ -43,6 +43,13 @@ jobs:
             echo "🗂️ Collecting static files..."
             docker exec bet-bot-web python manage.py collectstatic --noinput
 
+            echo "🌐 Updating domain config..."
+            sed -i 's/ALLOWED_HOSTS=.*/ALLOWED_HOSTS=69.164.245.17,localhost,127.0.0.1,bet.h2wrestuarantcafe.xyz,bet.kontolasports.com/' .env
+            grep -q 'CSRF_TRUSTED_ORIGINS' .env && \
+              sed -i 's|CSRF_TRUSTED_ORIGINS=.*|CSRF_TRUSTED_ORIGINS=https://bet.h2wrestuarantcafe.xyz,https://bet.kontolasports.com|' .env || \
+              echo 'CSRF_TRUSTED_ORIGINS=https://bet.h2wrestuarantcafe.xyz,https://bet.kontolasports.com' >> .env
+            sed -i 's/server_name bet\.h2wrestuarantcafe\.xyz/server_name bet.h2wrestuarantcafe.xyz bet.kontolasports.com/' /root/SpotPay-deployment/nginx.conf
+
             echo "✅ Deployment complete!"
             docker network connect betting_bot_prod_default spotpay-deployment-nginx-1 || true
             docker restart spotpay-deployment-nginx-1
