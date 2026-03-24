@@ -249,7 +249,6 @@ def sms_credits(request):
         "total_spent": total_spent,
     })
 
-
 @owner_required
 def sms_topup_pay(request):
     import json, uuid
