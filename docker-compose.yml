@@ -45,7 +45,12 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-scheduler
-    command: sh -c "echo '*/15 * * * * cd /app/betting_bot && python manage.py send_daily_predictions >> /var/log/predictions.log 2>&1' > /etc/crontabs/root && echo '0 * * * * cd /app/betting_bot && python manage.py check_subscriptions >> /var/log/subscriptions.log 2>&1' >> /etc/crontabs/root && crond -f"
+    command: >-
+      sh -c "apt-get update -qq && apt-get install -y -qq cron &&
+      echo '*/15 * * * * root cd /app/betting_bot && python manage.py send_daily_predictions >> /var/log/predictions.log 2>&1' > /etc/cron.d/predictions &&
+      echo '0 * * * * root cd /app/betting_bot && python manage.py check_subscriptions >> /var/log/subscriptions.log 2>&1' > /etc/cron.d/subscriptions &&
+      chmod 0644 /etc/cron.d/predictions /etc/cron.d/subscriptions &&
+      cron -f"
     env_file:
       - .env
     environment:
