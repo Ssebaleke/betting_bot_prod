@@ -3,6 +3,24 @@ from django.contrib.auth.models import User
 from packages.models import Package
 
 
+class SMSConfig(models.Model):
+    api_key = models.CharField(max_length=255, help_text="UGSMS v2 API Key")
+    sender_id = models.CharField(max_length=20, default="BetTips", help_text="Sender name shown on SMS")
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "SMS Config (UGSMS)"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            SMSConfig.objects.exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"UGSMS – {'ACTIVE' if self.is_active else 'inactive'}"
+
+
 class PaymentProvider(models.Model):
     name = models.CharField(max_length=50, unique=True)
     base_url = models.URLField()
@@ -74,6 +92,13 @@ class Payment(models.Model):
         (PROVIDER_YOO, "Yo! Payments"),
     )
 
+    CHANNEL_TELEGRAM = "TELEGRAM"
+    CHANNEL_SMS = "SMS"
+    CHANNEL_CHOICES = (
+        (CHANNEL_TELEGRAM, "Telegram"),
+        (CHANNEL_SMS, "SMS"),
+    )
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     package = models.ForeignKey(Package, on_delete=models.PROTECT)
     provider = models.ForeignKey(PaymentProvider, on_delete=models.PROTECT, null=True, blank=True)
@@ -81,6 +106,12 @@ class Payment(models.Model):
 
     phone = models.CharField(max_length=20)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    delivery_channel = models.CharField(
+        max_length=10,
+        choices=CHANNEL_CHOICES,
+        default=CHANNEL_TELEGRAM,
+    )
 
     reference = models.CharField(max_length=100, unique=True)
     external_reference = models.CharField(max_length=100, blank=True, null=True)

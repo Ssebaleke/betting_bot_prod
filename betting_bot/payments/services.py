@@ -16,6 +16,29 @@ from .yoo_client import YooClient, make_reference, normalize_phone as normalize_
 logger = logging.getLogger(__name__)
 
 
+def get_or_create_phone_user(phone: str) -> User:
+    """Get or create a Django user keyed by phone number."""
+    from payments.makypay import normalize_ug_phone
+    normalized = normalize_ug_phone(phone)
+    username = f"web_{normalized}"
+    user, _ = User.objects.get_or_create(
+        username=username,
+        defaults={"first_name": normalized},
+    )
+    return user
+
+
+def initiate_web_payment(phone: str, package_id: int) -> Payment:
+    """Entry point for landing page payments - auto-creates user, forces SMS channel."""
+    user = get_or_create_phone_user(phone)
+    package = Package.objects.get(id=package_id, is_active=True)
+
+    yoo = YooPaymentProvider.objects.filter(is_active=True).first()
+    if yoo:
+        return initiate_yoo_payment(user=user, package=package, phone=phone, delivery_channel="SMS")
+    return initiate_payment(user=user, package=package, phone=phone, delivery_channel="SMS")
+
+
 def get_active_provider() -> tuple[PaymentProvider, PaymentProviderConfig]:
     """
     Return active PaymentProvider + its active config.
@@ -32,7 +55,7 @@ def get_active_provider() -> tuple[PaymentProvider, PaymentProviderConfig]:
 
 
 @transaction.atomic
-def initiate_payment(user: User, package: Package, phone: str) -> Payment:
+def initiate_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
     """
     1) Normalize phone
     2) Create Payment (PENDING)
@@ -70,10 +93,11 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
     payment = Payment.objects.create(
         user=user,
         package=package,
-        provider=provider,     # ✅ required by your model
+        provider=provider,
         phone=phone_number,
         amount=amount,
         reference=reference,
+        delivery_channel=delivery_channel,
         status=Payment.STATUS_PENDING,
     )
 
@@ -103,7 +127,7 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
 
 
 @transaction.atomic
-def initiate_yoo_payment(user: User, package: Package, phone: str) -> Payment:
+def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
     """
     Initiate a Yo! Payments USSD push collection.
     """
@@ -138,6 +162,7 @@ def initiate_yoo_payment(user: User, package: Package, phone: str) -> Payment:
         phone=phone_normalized,
         amount=amount,
         reference=reference,
+        delivery_channel=delivery_channel,
         status=Payment.STATUS_PENDING,
     )
 
@@ -186,31 +211,63 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     )
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
+    # Send SMS confirmation for web payments
+    if payment.delivery_channel == Payment.CHANNEL_SMS:
+        try:
+            from .sms import send_sms
+            send_sms(
+                payment.phone,
+                f"Payment confirmed! UGX {int(payment.amount):,} for {payment.package.name} package. "
+                f"Your predictions will be sent to this number daily. Bet Responsibly!"
+            )
+        except Exception as e:
+            logger.error("SMS confirmation failed for ref=%s: %s", reference, e)
+
     # Send today's predictions if already sent for this package
     try:
         from predictions.models import Prediction
-        from bots.notifications import send_telegram_message
 
-        today_predictions = Prediction.objects.filter(
+        today_predictions = list(Prediction.objects.filter(
             is_active=True,
             is_sent=True,
-            send_date=timezone.now().date(),
+            send_date=timezone.localtime(timezone.now()).date(),
             package=payment.package,
-        ).order_by('match_time')
+        ).order_by('match_time'))
 
-        if today_predictions.exists():
-            telegram_profile = payment.user.telegramprofile
+        if today_predictions:
             message = _build_predictions_message(
-                list(today_predictions),
+                today_predictions,
                 payment.package.name,
-                timezone.now().date()
+                timezone.localtime(timezone.now()).date()
             )
-            send_telegram_message(telegram_profile.telegram_id, message)
-            logger.info("Sent today's predictions to new subscriber user=%s", payment.user.id)
+            _deliver_predictions(payment.user, payment.phone, payment.delivery_channel, message)
+            logger.info("Sent today's predictions to new subscriber user=%s channel=%s", payment.user.id, payment.delivery_channel)
     except Exception as e:
         logger.error("Failed to send predictions to new subscriber: %s", e)
 
     return payment
+
+
+def _deliver_predictions(user, phone: str, channel: str, message: str):
+    """Route prediction delivery to Telegram or SMS based on channel."""
+    if channel == "SMS":
+        from .sms import send_sms
+        send_sms(phone, _strip_markdown(message))
+    else:
+        from bots.notifications import send_telegram_message
+        try:
+            telegram_profile = user.telegramprofile
+            send_telegram_message(telegram_profile.telegram_id, message)
+        except Exception as e:
+            logger.error("Telegram delivery failed for user=%s: %s", user.id, e)
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove Markdown formatting for plain SMS text."""
+    import re
+    text = re.sub(r'\*+', '', text)
+    text = re.sub(r'_+', '', text)
+    return text
 
 
 def _build_predictions_message(predictions, package_name, date):

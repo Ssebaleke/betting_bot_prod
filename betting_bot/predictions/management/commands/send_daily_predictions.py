@@ -2,6 +2,7 @@
 Management command to send daily predictions to active subscribers
 Usage: python manage.py send_daily_predictions
 """
+import re
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import datetime
@@ -10,6 +11,8 @@ import logging
 from predictions.models import Prediction
 from subscription.models import Subscription
 from bots.notifications import send_telegram_message
+from payments.sms import send_sms
+from payments.models import Payment
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +78,24 @@ class Command(BaseCommand):
                 if not package_predictions:
                     continue
 
+                # Determine delivery channel from latest successful payment
+                latest_payment = Payment.objects.filter(
+                    user=subscription.user,
+                    status=Payment.STATUS_SUCCESS,
+                ).order_by("-created_at").first()
+                channel = latest_payment.delivery_channel if latest_payment else Payment.CHANNEL_TELEGRAM
+
                 message = self._build_message(package_predictions, subscription.package.name, target_date)
-                telegram_profile = subscription.user.telegramprofile
-                success = send_telegram_message(telegram_profile.telegram_id, message)
+
+                if channel == Payment.CHANNEL_SMS:
+                    phone = latest_payment.phone
+                    success = send_sms(phone, self._strip_markdown(message))
+                else:
+                    try:
+                        telegram_profile = subscription.user.telegramprofile
+                        success = send_telegram_message(telegram_profile.telegram_id, message)
+                    except Exception:
+                        success = False
 
                 if success:
                     sent_count += 1
@@ -102,6 +120,11 @@ class Command(BaseCommand):
             f"📦 Packages: {len(predictions_by_package)}\n"
             f"🎯 Total predictions: {predictions.count()}"
         ))
+
+    def _strip_markdown(self, text: str) -> str:
+        text = re.sub(r'\*+', '', text)
+        text = re.sub(r'_+', '', text)
+        return text
 
     def _build_message(self, predictions, package_name, date):
         message = (

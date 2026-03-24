@@ -16,7 +16,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-this-in-production")
 
-DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
+
+WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", "")
+
+# UG-SMS
+UG_SMS_USERNAME = os.environ.get("UG_SMS_USERNAME", "")
+UG_SMS_PASSWORD = os.environ.get("UG_SMS_PASSWORD", "")
+UG_SMS_SENDER_ID = os.environ.get("UG_SMS_SENDER_ID", "BetTips")
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 
@@ -41,8 +48,9 @@ INSTALLED_APPS = [
     "odds",
     "bots",
     "configs",
-    "predictions", 
+    "predictions",
     "api",
+    "landing",
 
 ]
 

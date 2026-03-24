@@ -1,11 +1,49 @@
 from django.db import models
 
 
-class Package(models.Model):
+class PackageCategory(models.Model):
     name = models.CharField(
         max_length=50,
         unique=True,
-        help_text="e.g. Ordinary, VIP, VVIP, hub"
+        help_text="e.g. Daily, Weekly, Monthly"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Short description of this category"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Disable to hide this category"
+    )
+    order = models.PositiveIntegerField(
+        default=1,
+        help_text="Display order (lower = first)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order"]
+        verbose_name = "Package Category"
+        verbose_name_plural = "Package Categories"
+
+    def __str__(self):
+        return self.name
+
+
+class Package(models.Model):
+    category = models.ForeignKey(
+        PackageCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="packages",
+        help_text="Category this package belongs to (e.g. Daily, Weekly)"
+    )
+
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="e.g. Ordinary, VIP, VVIP"
     )
 
     description = models.TextField(
@@ -40,4 +78,5 @@ class Package(models.Model):
         ordering = ["level"]
 
     def __str__(self):
-        return f"{self.name} ({self.duration_days} days)"
+        category = self.category.name if self.category else "Uncategorized"
+        return f"{category} - {self.name} ({self.duration_days} days)"

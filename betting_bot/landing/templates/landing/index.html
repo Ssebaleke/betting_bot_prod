@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BetTips Pro – Daily Winning Predictions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a23;
+      --card: #1e2330;
+      --border: #2a3045;
+      --green: #00c853;
+      --green-dim: #00a844;
+      --gold: #ffd600;
+      --gold-dim: #c9a800;
+      --text: #e8eaf0;
+      --muted: #7a8099;
+      --danger: #ff4444;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #0d0f14 0%, #111827 60%, #0a1a0f 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 20px 40px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(0,200,83,.12);
+      border: 1px solid rgba(0,200,83,.3);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 20px;
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 14px;
+    }
+    .hero h1 span { color: var(--green); }
+    .hero p {
+      color: var(--muted);
+      font-size: 16px;
+      max-width: 480px;
+      margin: 0 auto 28px;
+      line-height: 1.6;
+    }
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 800; color: var(--gold); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── MAIN ── */
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 20px 60px; }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── STEPS ── */
+    .steps {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 36px;
+      align-items: center;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .step.active { color: var(--text); }
+    .step.done { color: var(--green); }
+    .step-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step.active .step-num { border-color: var(--green); color: var(--green); }
+    .step.done .step-num { background: var(--green); border-color: var(--green); color: #000; }
+    .step-divider { flex: 1; height: 1px; background: var(--border); min-width: 16px; }
+
+    /* ── PANELS ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── CATEGORY GRID ── */
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+    .category-card {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 16px;
+      cursor: pointer;
+      transition: border-color .2s, transform .15s;
+      text-align: center;
+    }
+    .category-card:hover { border-color: var(--green-dim); transform: translateY(-2px); }
+    .category-card.selected { border-color: var(--green); background: rgba(0,200,83,.06); }
+    .category-icon { font-size: 28px; margin-bottom: 10px; }
+    .category-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .category-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    /* ── PACKAGE GRID ── */
+    .package-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .package-card {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 18px;
+      cursor: pointer;
+      transition: border-color .2s, transform .15s;
+      position: relative;
+    }
+    .package-card:hover { border-color: var(--gold-dim); transform: translateY(-2px); }
+    .package-card.selected { border-color: var(--gold); background: rgba(255,214,0,.04); }
+    .package-card.popular::before {
+      content: "POPULAR";
+      position: absolute; top: -1px; right: 14px;
+      background: var(--gold); color: #000;
+      font-size: 9px; font-weight: 800; letter-spacing: 1px;
+      padding: 3px 8px; border-radius: 0 0 6px 6px;
+    }
+    .pkg-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .pkg-price { font-size: 26px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+    .pkg-price span { font-size: 13px; font-weight: 500; color: var(--muted); }
+    .pkg-duration { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .pkg-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    /* ── PHONE FORM ── */
+    .phone-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      max-width: 420px;
+    }
+    .selected-summary {
+      background: rgba(0,200,83,.07);
+      border: 1px solid rgba(0,200,83,.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 22px;
+      font-size: 14px;
+    }
+    .selected-summary strong { color: var(--green); }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .phone-input-wrap {
+      display: flex;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      transition: border-color .2s;
+    }
+    .phone-input-wrap:focus-within { border-color: var(--green); }
+    .phone-prefix {
+      background: var(--surface);
+      padding: 0 14px;
+      display: flex; align-items: center;
+      font-size: 14px; font-weight: 600;
+      color: var(--muted);
+      border-right: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    .phone-input-wrap input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 16px;
+      padding: 14px 14px;
+    }
+    .phone-input-wrap input::placeholder { color: var(--muted); }
+
+    .btn-pay {
+      width: 100%;
+      background: linear-gradient(135deg, var(--green), var(--green-dim));
+      color: #000;
+      font-size: 15px;
+      font-weight: 800;
+      border: none;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s;
+      letter-spacing: .3px;
+    }
+    .btn-pay:hover { opacity: .9; transform: translateY(-1px); }
+    .btn-pay:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-pay .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,.3);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn-back {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-back:hover { border-color: var(--text); color: var(--text); }
+
+    /* ── SUCCESS ── */
+    .success-card {
+      background: var(--card);
+      border: 1px solid rgba(0,200,83,.3);
+      border-radius: var(--radius);
+      padding: 40px 28px;
+      text-align: center;
+      max-width: 420px;
+    }
+    .success-icon { font-size: 56px; margin-bottom: 16px; }
+    .success-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: var(--green); }
+    .success-card p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+    .success-card .phone-highlight {
+      display: inline-block;
+      background: rgba(0,200,83,.1);
+      border: 1px solid rgba(0,200,83,.25);
+      color: var(--green);
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 15px;
+      margin: 8px 0 16px;
+    }
+
+    /* ── ERROR ── */
+    .error-msg {
+      background: rgba(255,68,68,.1);
+      border: 1px solid rgba(255,68,68,.3);
+      color: var(--danger);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    /* ── LOADING SKELETON ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 8px;
+      height: 100px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 24px 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+
+    @media (max-width: 480px) {
+      .steps { gap: 4px; }
+      .step-label { display: none; }
+      .phone-card { padding: 20px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">⚽ Live Predictions</div>
+  <h1>Win More With<br><span>Expert Betting Tips</span></h1>
+  <p>Daily predictions delivered straight to your phone. Subscribe once, receive tips every day.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-value">85%+</div><div class="stat-label">Win Rate</div></div>
+    <div class="stat"><div class="stat-value">500+</div><div class="stat-label">Subscribers</div></div>
+    <div class="stat"><div class="stat-value">Daily</div><div class="stat-label">Tips Sent</div></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="container">
+
+  <!-- STEPS INDICATOR -->
+  <div class="steps" id="stepsBar">
+    <div class="step active" id="step1">
+      <div class="step-num">1</div>
+      <span class="step-label">Category</span>
+    </div>
+    <div class="step-divider"></div>
+    <div class="step" id="step2">
+      <div class="step-num">2</div>
+      <span class="step-label">Package</span>
+    </div>
+    <div class="step-divider"></div>
+    <div class="step" id="step3">
+      <div class="step-num">3</div>
+      <span class="step-label">Pay</span>
+    </div>
+  </div>
+
+  <!-- PANEL 1: CATEGORIES -->
+  <div class="panel active" id="panelCategory">
+    <div class="section-title">Step 1 — Choose a Category</div>
+    <div class="category-grid" id="categoryGrid">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+  </div>
+
+  <!-- PANEL 2: PACKAGES -->
+  <div class="panel" id="panelPackage">
+    <button class="btn-back" onclick="goBack(1)">← Back</button>
+    <div class="section-title" id="packageSectionTitle">Step 2 — Choose a Package</div>
+    <div class="package-grid" id="packageGrid"></div>
+  </div>
+
+  <!-- PANEL 3: PHONE + PAY -->
+  <div class="panel" id="panelPhone">
+    <button class="btn-back" onclick="goBack(2)">← Back</button>
+    <div class="phone-card">
+      <div class="selected-summary" id="selectedSummary"></div>
+      <div class="error-msg" id="errorMsg"></div>
+      <label for="phoneInput">Mobile Money Number</label>
+      <div class="phone-input-wrap">
+        <div class="phone-prefix">🇺🇬 +256</div>
+        <input type="tel" id="phoneInput" placeholder="7XXXXXXXX" maxlength="9" inputmode="numeric" />
+      </div>
+      <button class="btn-pay" id="payBtn" onclick="submitPayment()">
+        Pay Now via Mobile Money
+      </button>
+    </div>
+  </div>
+
+  <!-- PANEL 4: SUCCESS -->
+  <div class="panel" id="panelSuccess">
+    <div class="success-card">
+      <div class="success-icon">✅</div>
+      <h2>Payment Received!</h2>
+      <p>Your subscription is now active.</p>
+      <div class="phone-highlight" id="successPhone"></div>
+      <p>Predictions will be sent to your phone via SMS every day. An SMS confirmation has been sent to you.</p>
+      <p style="margin-top:16px; font-size:12px;">Bet Responsibly 🍀</p>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  &copy; 2025 BetTips Pro &nbsp;|&nbsp; <a href="#">Terms</a> &nbsp;|&nbsp; Bet Responsibly
+</footer>
+
+<script>
+  const CATEGORY_ICONS = ["📅","📆","🗓️","⚡","🔥","💎","🏆","⭐"];
+  let categories = [];
+  let selectedCategory = null;
+  let selectedPackage = null;
+
+  // ── Load categories on page load ──
+  fetch("/api/categories/")
+    .then(r => r.json())
+    .then(data => {
+      categories = data.categories;
+      renderCategories();
+    })
+    .catch(() => {
+      document.getElementById("categoryGrid").innerHTML =
+        '<p style="color:var(--danger);font-size:14px;">Failed to load packages. Please refresh.</p>';
+    });
+
+  function renderCategories() {
+    const grid = document.getElementById("categoryGrid");
+    if (!categories.length) {
+      grid.innerHTML = '<p style="color:var(--muted);font-size:14px;">No packages available right now.</p>';
+      return;
+    }
+    grid.innerHTML = categories.map((cat, i) => `
+      <div class="category-card" onclick="selectCategory(${cat.id})">
+        <div class="category-icon">${CATEGORY_ICONS[i % CATEGORY_ICONS.length]}</div>
+        <div class="category-name">${esc(cat.name)}</div>
+        <div class="category-desc">${esc(cat.description) || cat.packages.length + " package" + (cat.packages.length !== 1 ? "s" : "")}</div>
+      </div>
+    `).join("");
+  }
+
+  function selectCategory(id) {
+    selectedCategory = categories.find(c => c.id === id);
+    renderPackages();
+    showPanel(2);
+  }
+
+  function renderPackages() {
+    const grid = document.getElementById("packageGrid");
+    const pkgs = selectedCategory.packages;
+    document.getElementById("packageSectionTitle").textContent =
+      `Step 2 — Choose a ${selectedCategory.name} Package`;
+
+    grid.innerHTML = pkgs.map((p, i) => `
+      <div class="package-card ${i === 1 && pkgs.length > 1 ? 'popular' : ''}" onclick="selectPackage(${p.id}, '${esc(p.name)}', '${p.price}', ${p.duration_days})">
+        <div class="pkg-name">${esc(p.name)}</div>
+        <div class="pkg-price">UGX ${fmt(p.price)}<span> /sub</span></div>
+        <div class="pkg-duration">${p.duration_days} day${p.duration_days !== 1 ? "s" : ""}</div>
+        <div class="pkg-desc">${esc(p.description) || "Daily predictions delivered via SMS"}</div>
+      </div>
+    `).join("");
+  }
+
+  function selectPackage(id, name, price, days) {
+    selectedPackage = { id, name, price, days };
+    document.getElementById("selectedSummary").innerHTML =
+      `<strong>${esc(selectedCategory.name)} – ${esc(name)}</strong><br>` +
+      `UGX ${fmt(price)} &nbsp;·&nbsp; ${days} day${days !== 1 ? "s" : ""}`;
+    document.getElementById("phoneInput").value = "";
+    hideError();
+    showPanel(3);
+  }
+
+  function submitPayment() {
+    const raw = document.getElementById("phoneInput").value.trim();
+    const phone = raw.replace(/^0+/, "");
+
+    if (!/^[7][0-9]{8}$/.test(phone)) {
+      showError("Enter a valid Uganda mobile number e.g. 701234567");
+      return;
+    }
+
+    const btn = document.getElementById("payBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Sending USSD…';
+    hideError();
+
+    fetch("/pay/initiate/web/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie("csrftoken") },
+      body: JSON.stringify({ phone: "256" + phone, package_id: selectedPackage.id })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById("successPhone").textContent = "+256" + phone;
+        showPanel(4);
+      } else {
+        showError(data.error || "Payment failed. Please try again.");
+        btn.disabled = false;
+        btn.innerHTML = "Pay Now via Mobile Money";
+      }
+    })
+    .catch(() => {
+      showError("Network error. Please check your connection and try again.");
+      btn.disabled = false;
+      btn.innerHTML = "Pay Now via Mobile Money";
+    });
+  }
+
+  // ── Panel navigation ──
+  function showPanel(n) {
+    ["panelCategory","panelPackage","panelPhone","panelSuccess"].forEach((id, i) => {
+      document.getElementById(id).classList.toggle("active", i + 1 === n);
+    });
+    updateSteps(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goBack(n) { showPanel(n); }
+
+  function updateSteps(active) {
+    [1,2,3].forEach(i => {
+      const el = document.getElementById("step" + i);
+      el.classList.remove("active","done");
+      if (i < active) el.classList.add("done");
+      else if (i === active) el.classList.add("active");
+    });
+    document.getElementById("stepsBar").style.display = active === 4 ? "none" : "flex";
+  }
+
+  // ── Helpers ──
+  function showError(msg) {
+    const el = document.getElementById("errorMsg");
+    el.textContent = msg;
+    el.classList.add("show");
+  }
+  function hideError() { document.getElementById("errorMsg").classList.remove("show"); }
+
+  function fmt(price) {
+    return Number(price).toLocaleString("en-UG");
+  }
+
+  function esc(str) {
+    if (!str) return "";
+    return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function getCookie(name) {
+    const v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
+    return v ? v.pop() : "";
+  }
+</script>
+</body>
+</html>

@@ -6,11 +6,22 @@ from django.utils import timezone
 from django.urls import path
 from django.shortcuts import render
 from .models import (
+    SMSConfig,
     PaymentProvider,
     PaymentProviderConfig,
     YooPaymentProvider,
     Payment,
 )
+
+
+@admin.register(SMSConfig)
+class SMSConfigAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "sender_id", "is_active", "created_at")
+    list_editable = ("is_active",)
+    fieldsets = (
+        ("UGSMS v2 Credentials", {"fields": ("api_key", "sender_id")}),
+        ("Status", {"fields": ("is_active",)}),
+    )
 
 
 @admin.register(PaymentProvider)

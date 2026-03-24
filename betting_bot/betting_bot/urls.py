@@ -23,6 +23,7 @@ admin.site.index_title = "Dashboard"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("", include("payments.urls")),
+    path("", include("landing.urls")),
+    path("pay/", include("payments.urls")),
     path("api/", include("api.urls")),
 ]

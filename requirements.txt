@@ -35,3 +35,14 @@ gunicorn==21.2.0
 whitenoise==6.11.0
 
 psycopg2-binary==2.9.9
+vico@vps3247673:~$ sudo cp /etc/letsencrypt/archive/bet.h2wrestuarantcafe.xyz/fullchain2.pem /home/vico/bet-fullchain.pem
+d 644 /home/vico/bet-fullchain.pem
+docker cp /home/vico/bet-fullchain.pem spotpay-deployment-nginx-1:/tmp/bet-fullchainsudo chmod 644 /home/vico/bet-fullchain.pem
+docker cp /home/vico/bet-fullchain.pem spotpay-deployment-nginx-1:/tmp/bet-fullchain.pem
+vico@vps3247673:~$
+
+
+
+
+
+

@@ -1,8 +1,4 @@
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -17,8 +13,10 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 
 from bots.models import TelegramBotConfig, TelegramProfile
+from bots.handlers import today_command
 from packages.models import Package
-from payments.services import initiate_payment
+from payments.models import YooPaymentProvider
+from payments.services import initiate_payment, initiate_yoo_payment
 from subscription.models import Subscription
 
 
@@ -76,38 +74,106 @@ def ensure_telegram_profile(telegram_id, username):
 
 
 @sync_to_async
-def has_active_subscription(telegram_id):
+def get_active_subscription(telegram_id):
     return Subscription.objects.filter(
         user__telegramprofile__telegram_id=telegram_id,
         is_active=True,
         end_date__gt=timezone.now(),
-    ).exists()
+    ).select_related("package").first()
+
+
+@sync_to_async
+def do_initiate_payment(user, package, phone):
+    if YooPaymentProvider.objects.filter(is_active=True).exists():
+        return initiate_yoo_payment(user=user, package=package, phone=phone)
+    return initiate_payment(user=user, package=package, phone=phone)
 
 
 # =========================
-# START / WELCOME
+# /start
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     packages = await get_packages()
-
     keyboard = [
-        [
-            InlineKeyboardButton(
-                text=f"{pkg['name']} – UGX {pkg['price']}",
-                callback_data=f"PKG_{pkg['id']}",
-            )
-        ]
+        [InlineKeyboardButton(
+            text=f"{pkg['name']} – UGX {pkg['price']} / {pkg['duration_days']} days",
+            callback_data=f"PKG_{pkg['id']}",
+        )]
         for pkg in packages
     ]
-
     await update.message.reply_text(
         "👋 *Welcome to Vico BetBot*\n\n"
-        "Get daily high-accuracy betting odds delivered straight to Telegram.\n\n"
-        "👇 *Choose a package to continue:*",
+        "Get daily high-accuracy betting predictions delivered straight to Telegram.\n\n"
+        "👇 *Choose a package to subscribe:*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
+
+
+# =========================
+# /help
+# =========================
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📖 *Available Commands*\n\n"
+        "/start — Subscribe or renew your package\n"
+        "/today — Get today's predictions\n"
+        "/mysubscription — Check your subscription status\n"
+        "/renew — Renew your current package\n"
+        "/help — Show this help message\n\n"
+        "💬 For support, contact the admin.",
+        parse_mode="Markdown",
+    )
+
+
+# =========================
+# /mysubscription
+# =========================
+
+async def my_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    subscription = await get_active_subscription(telegram_id)
+
+    if not subscription:
+        await update.message.reply_text(
+            "❌ You have no active subscription.\n\nUse /start to subscribe.",
+        )
+        return
+
+    now = timezone.now()
+    days_remaining = (subscription.end_date - now).days
+    expiry_str = timezone.localtime(subscription.end_date).strftime("%B %d, %Y at %H:%M")
+
+    await update.message.reply_text(
+        f"📦 *Your Subscription*\n\n"
+        f"✅ Package: *{subscription.package.name}*\n"
+        f"📅 Expires: {expiry_str}\n"
+        f"⏳ Days remaining: *{days_remaining} day(s)*\n\n"
+        f"Use /today to get today's predictions.",
+        parse_mode="Markdown",
+    )
+
+
+# =========================
+# /renew
+# =========================
+
+async def renew(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    subscription = await get_active_subscription(telegram_id)
+
+    if subscription:
+        context.user_data["package_id"] = subscription.package.id
+        await update.message.reply_text(
+            f"🔄 *Renew {subscription.package.name}*\n\n"
+            f"📞 Enter your MTN or Airtel number to pay:\n"
+            f"Example: `0708826558`",
+            parse_mode="Markdown",
+        )
+    else:
+        await start(update, context)
 
 
 # =========================
@@ -123,8 +189,8 @@ async def package_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(
         text=(
-            "📦 *Package selected*\n\n"
-            "📞 Please enter your *MTN or Airtel* number to pay.\n"
+            "📦 *Package selected!*\n\n"
+            "📞 Enter your *MTN or Airtel* number to pay:\n"
             "Example: `0708826558`"
         ),
         parse_mode="Markdown",
@@ -141,60 +207,33 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     phone = update.message.text.strip()
     if not phone.isdigit() or len(phone) < 9:
-        await update.message.reply_text("❌ Invalid phone number.")
+        await update.message.reply_text("❌ Invalid phone number. Please enter a valid MTN or Airtel number.")
         return
 
     telegram_user = update.effective_user
-    telegram_id = telegram_user.id
-
-    profile = await ensure_telegram_profile(telegram_id, telegram_user.username)
+    profile = await ensure_telegram_profile(telegram_user.id, telegram_user.username)
     package = await get_package(context.user_data["package_id"])
 
+    await update.message.reply_text(
+        "⏳ *Processing your payment...*\n\nPlease wait.",
+        parse_mode="Markdown",
+    )
+
     try:
-        await sync_to_async(initiate_payment)(
-            user=profile.user,
-            package=package,
-            phone=phone,
-        )
+        await do_initiate_payment(user=profile.user, package=package, phone=phone)
         await update.message.reply_text(
             "📲 *Payment request sent!*\n\n"
-            "Please approve the payment on your phone.\n"
-            "⏳ Waiting for confirmation...",
+            "✅ Please *approve the payment* on your phone.\n\n"
+            "⏳ You will receive a confirmation message once payment is complete.",
             parse_mode="Markdown",
         )
     except Exception as e:
         await update.message.reply_text(
-            f"❌ Payment failed: {str(e)}\n\n"
-            "Please try again or contact support."
+            f"❌ *Payment failed:* {str(e)}\n\nPlease try again with /start",
+            parse_mode="Markdown",
         )
 
     context.user_data.clear()
-
-
-# =========================
-# ODDS (BLOCK IF NOT PAID)
-# =========================
-
-async def odds(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_id = update.effective_user.id
-    subscribed = await has_active_subscription(telegram_id)
-
-    if not subscribed:
-        await update.message.reply_text(
-            "🚫 No active subscription.\n\n"
-            "👇 Choose a package to continue:",
-        )
-        await start(update, context)
-        return
-
-    await update.message.reply_text(
-        "🔥 *TODAY’S ODDS* 🔥\n\n"
-        "⚽ Man City vs Arsenal\n"
-        "➡️ Both teams to score @ 1.75\n\n"
-        "⚽ Barcelona vs Sevilla\n"
-        "➡️ Over 2.5 goals @ 1.68",
-        parse_mode="Markdown",
-    )
 
 
 # =========================
@@ -213,11 +252,12 @@ def run_bot():
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("odds", odds))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("today", today_command))
+    app.add_handler(CommandHandler("mysubscription", my_subscription))
+    app.add_handler(CommandHandler("renew", renew))
     app.add_handler(CallbackQueryHandler(package_selected, pattern="^PKG_"))
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone))
 
     print("✅ Telegram bot is running and polling...")
     app.run_polling()

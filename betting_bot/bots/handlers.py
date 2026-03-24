@@ -1,75 +1,87 @@
-import requests
-from django.conf import settings
-
 from telegram import Update
 from telegram.ext import ContextTypes
+from asgiref.sync import sync_to_async
+from django.utils import timezone
 
 from bots.models import TelegramProfile
+from subscription.models import Subscription
+from predictions.models import Prediction
 
 
-API_URL = "http://127.0.0.1:8000/api/predictions/today/"
+@sync_to_async
+def get_today_predictions(telegram_id):
+    try:
+        profile = TelegramProfile.objects.select_related("user").get(telegram_id=telegram_id)
+    except TelegramProfile.DoesNotExist:
+        return None, None
+
+    subscription = Subscription.objects.filter(
+        user=profile.user,
+        is_active=True,
+        end_date__gt=timezone.now()
+    ).select_related("package").first()
+
+    if not subscription:
+        return profile, None
+
+    local_now = timezone.localtime(timezone.now())
+    predictions = list(
+        Prediction.objects.filter(
+            is_active=True,
+            is_sent=True,
+            send_date=local_now.date(),
+            package=subscription.package,
+        ).order_by("match_time")
+    )
+    return profile, predictions
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    telegram_user = update.effective_user
+    telegram_id = update.effective_user.id
+    profile, predictions = await get_today_predictions(telegram_id)
 
-    # 1️⃣ Find Telegram profile
-    try:
-        profile = TelegramProfile.objects.select_related("user").get(
-            telegram_id=telegram_user.id
-        )
-    except TelegramProfile.DoesNotExist:
+    if profile is None:
         await update.message.reply_text(
-            "❌ Your Telegram is not linked to an account.\n"
-            "Please use /start to link your account."
+            "❌ Your Telegram is not linked to an account.\nUse /start to get started."
         )
         return
 
-    user = profile.user
-
-    # 2️⃣ Call API using session authentication
-    session = requests.Session()
-    session.cookies = context.bot_data.get("django_cookies", {})
-
-    response = session.get(API_URL)
-
-    if response.status_code == 403:
+    if predictions is None:
         await update.message.reply_text(
-            "❌ You do not have an active subscription."
+            "🚫 No active subscription.\nUse /start to subscribe."
         )
         return
 
-    if response.status_code != 200:
-        await update.message.reply_text(
-            "⚠️ Unable to fetch today’s predictions. Try again later."
-        )
+    if not predictions:
+        await update.message.reply_text("📭 No predictions sent yet for today. Check back later.")
         return
 
-    data = response.json()
+    subscription = await sync_to_async(
+        lambda: Subscription.objects.filter(
+            user__telegramprofile__telegram_id=telegram_id,
+            is_active=True
+        ).select_related("package").first()
+    )()
 
-    if data["count"] == 0:
-        await update.message.reply_text(
-            "📭 No predictions available for today."
-        )
-        return
-
-    # 3️⃣ Format message
-    lines = []
-    lines.append("🔥 *TODAY’S PICKS* 🔥\n")
-
-    for idx, p in enumerate(data["predictions"], start=1):
-        fixture = p["fixture"]
+    total_odds = 1
+    lines = [
+        f"🔥 *TODAY'S PREDICTIONS* 🔥\n"
+        f"📅 {timezone.localtime(timezone.now()).strftime('%A, %B %d, %Y')}\n"
+        f"📦 Package: {subscription.package.name}\n"
+    ]
+    for i, pred in enumerate(predictions, 1):
+        total_odds *= float(pred.odds)
         lines.append(
-            f"*{idx}. {fixture['home_team']} vs {fixture['away_team']}*\n"
-            f"🧠 Pick: *{p['selection']}*\n"
-            f"📊 Market: {p['market']}\n"
-            f"💰 Odds: {p['odds']}\n"
+            f"*{i}. {pred.home_team} vs {pred.away_team}*\n"
+            f"⏰ {pred.match_time.strftime('%H:%M')}\n"
+            f"🎯 Prediction: *{pred.prediction}*\n"
+            f"💰 Odds: *{pred.odds}*\n"
         )
-
-    message = "\n".join(lines)
-
-    # 4️⃣ Send message
-    await update.message.reply_text(
-        message,
-        parse_mode="Markdown"
+    lines.append(
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"🎰 *Total Combined Odds: {total_odds:.2f}*\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"💡 *Bet Responsibly* 🍀"
     )
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")

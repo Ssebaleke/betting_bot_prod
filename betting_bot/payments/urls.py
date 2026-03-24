@@ -7,6 +7,7 @@ from .views import (
     initiate_yoo_payment_view,
     yoo_ipn,
     yoo_failure_ipn,
+    landing_initiate_payment,
 )
 
 def home(request):
@@ -16,6 +17,7 @@ urlpatterns = [
     path("", home),
     path("initiate/", initiate_payment_view, name="initiate_payment"),
     path("initiate/yoo/", initiate_yoo_payment_view, name="initiate_yoo_payment"),
+    path("initiate/web/", landing_initiate_payment, name="landing_initiate_payment"),
     path("webhook/makypay/", makypay_webhook, name="makypay_webhook"),
     path("webhook/yoo/ipn/", yoo_ipn, name="yoo_ipn"),
     path("webhook/yoo/failure/", yoo_failure_ipn, name="yoo_failure_ipn"),
