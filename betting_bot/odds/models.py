@@ -78,3 +78,6 @@ class Odd(models.Model):
 
     def __str__(self):
         return f"{self.fixture} | {self.market} | {self.selection} @ {self.value}"
+
+
+#hello world save 
