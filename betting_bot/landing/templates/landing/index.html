@@ -354,7 +354,7 @@
     </div>
   </div>
 
-  <!-- PANEL 3: SUCCESS -->
+  <!-- PANEL 3: USSD SENT -->
   <div class="panel" id="panelSuccess">
     <div class="success-card">
       <div class="success-icon">📲</div>
@@ -362,8 +362,34 @@
       <p>A payment request has been sent to:</p>
       <div class="phone-highlight" id="successPhone"></div>
       <p>Check your phone and <strong style="color:var(--text)">approve the payment</strong> to activate your subscription.</p>
-      <p style="margin-top:12px;">Once approved, you will receive an SMS confirmation and predictions will start coming daily.</p>
+      <div style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; color:var(--muted); font-size:13px;">
+        <span class="spinner" style="border-color:rgba(122,128,153,.3); border-top-color:var(--muted);"></span>
+        Waiting for confirmation…
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 4: CONFIRMED -->
+  <div class="panel" id="panelConfirmed">
+    <div class="success-card" style="border-color:rgba(0,200,83,.4);">
+      <div class="success-icon">✅</div>
+      <h2>Payment Confirmed!</h2>
+      <p>Your subscription is now active.</p>
+      <div class="phone-highlight" id="confirmedPhone"></div>
+      <p style="margin-top:8px;">Daily predictions will be sent to your number every day.</p>
       <p style="margin-top:16px; font-size:12px;">Bet Responsibly 🍀</p>
+    </div>
+  </div>
+
+  <!-- PANEL 5: FAILED -->
+  <div class="panel" id="panelFailed">
+    <div class="success-card" style="border-color:rgba(255,68,68,.3);">
+      <div class="success-icon">❌</div>
+      <h2 style="color:var(--danger);">Payment Failed</h2>
+      <p id="failedMsg">The payment was not completed. Please try again.</p>
+      <button class="btn-pay" style="margin-top:24px; background:linear-gradient(135deg,#ff4444,#cc0000); color:#fff;" onclick="retryPayment()">
+        Try Again
+      </button>
     </div>
   </div>
 
@@ -375,6 +401,9 @@
 
 <script>
   let selectedPackage = null;
+  let currentReference = null;
+  let pollTimer = null;
+  let currentPhone = null;
 
   fetch("/packages/")
     .then(r => r.json())
@@ -414,6 +443,7 @@
   function submitPayment() {
     const raw = document.getElementById("phoneInput").value.trim();
     const phone = raw.replace(/^0+/, "");
+    currentPhone = phone;
 
     if (!/^[7][0-9]{8}$/.test(phone)) {
       showError("Enter a valid Uganda mobile number e.g. 701234567");
@@ -436,8 +466,10 @@
     .then(r => r.json())
     .then(data => {
       if (data.success) {
+        currentReference = data.reference;
         document.getElementById("successPhone").textContent = "+256" + phone;
         showPanel(3);
+        startPolling();
       } else {
         showError(data.error || "Payment failed. Please try again.");
         btn.disabled = false;
@@ -451,8 +483,42 @@
     });
   }
 
+  function startPolling() {
+    let attempts = 0;
+    const MAX = 24; // 2 minutes (24 x 5s)
+    pollTimer = setInterval(() => {
+      attempts++;
+      fetch("/pay/status/" + currentReference + "/")
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === "SUCCESS") {
+            clearInterval(pollTimer);
+            document.getElementById("confirmedPhone").textContent = "+256" + currentPhone;
+            showPanel(4);
+          } else if (data.status === "FAILED") {
+            clearInterval(pollTimer);
+            document.getElementById("failedMsg").textContent = "The payment was declined or cancelled. Please try again.";
+            showPanel(5);
+          } else if (attempts >= MAX) {
+            clearInterval(pollTimer);
+            document.getElementById("failedMsg").textContent = "Payment timed out. If you approved it, your subscription will activate shortly.";
+            showPanel(5);
+          }
+        })
+        .catch(() => { if (attempts >= MAX) clearInterval(pollTimer); });
+    }, 5000);
+  }
+
+  function retryPayment() {
+    clearInterval(pollTimer);
+    currentReference = null;
+    document.getElementById("phoneInput").value = "";
+    hideError();
+    showPanel(2);
+  }
+
   function showPanel(n) {
-    ["panelPackage", "panelPhone", "panelSuccess"].forEach((id, i) => {
+    ["panelPackage", "panelPhone", "panelSuccess", "panelConfirmed", "panelFailed"].forEach((id, i) => {
       document.getElementById(id).classList.toggle("active", i + 1 === n);
     });
     updateSteps(n);
@@ -466,7 +532,7 @@
       if (i < active) el.classList.add("done");
       else if (i === active) el.classList.add("active");
     });
-    document.getElementById("stepsBar").style.display = active === 3 ? "none" : "flex";
+    document.getElementById("stepsBar").style.display = active >= 3 ? "none" : "flex";
   }
 
   function showError(msg) {
