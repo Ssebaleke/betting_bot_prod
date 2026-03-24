@@ -517,13 +517,26 @@
     showPanel(2);
   }
 
-  function showPanel(n) {
+  function showPanel(n, pushState = true) {
     ["panelPackage", "panelPhone", "panelSuccess", "panelConfirmed", "panelFailed"].forEach((id, i) => {
       document.getElementById(id).classList.toggle("active", i + 1 === n);
     });
     updateSteps(n);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    if (pushState) history.pushState({ panel: n }, "");
   }
+
+  window.addEventListener("popstate", e => {
+    const panel = e.state && e.state.panel;
+    if (panel && panel > 1) {
+      showPanel(panel - 1, false);
+    } else {
+      showPanel(1, false);
+    }
+  });
+
+  // Set initial history state
+  history.replaceState({ panel: 1 }, "");
 
   function updateSteps(active) {
     [1, 2].forEach(i => {
