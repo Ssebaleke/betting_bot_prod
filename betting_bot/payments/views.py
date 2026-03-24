@@ -1,12 +1,14 @@
 import json
+from urllib.parse import parse_qs
 
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
 from packages.models import Package
 from .models import Payment
-from .services import initiate_payment, confirm_payment
+from .services import initiate_payment, initiate_yoo_payment, confirm_payment
+from .yoo_client import restore_reference
 
 
 SUCCESS_STATUSES = {"completed", "success", "successful", "paid"}
@@ -160,3 +162,153 @@ def payment_status(request, reference):
         "status": payment.status,
         "subscription_created": payment.status == Payment.STATUS_SUCCESS
     })
+
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+@csrf_exempt
+def initiate_yoo_payment_view(request):
+    """
+    Initiate Yo! Payments USSD push.
+
+    POST JSON:
+    {
+      "phone": "0708826558",
+      "package_id": 1,
+      "user_id": 10
+    }
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("Invalid request method")
+
+    try:
+        data = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return HttpResponseBadRequest("Invalid JSON")
+
+    phone = data.get("phone")
+    package_id = data.get("package_id")
+    user_id = data.get("user_id")
+
+    if not all([phone, package_id, user_id]):
+        return HttpResponseBadRequest("Missing required fields: phone, package_id, user_id")
+
+    try:
+        user = User.objects.get(id=user_id)
+        package = Package.objects.get(id=package_id)
+    except (User.DoesNotExist, Package.DoesNotExist):
+        return HttpResponseBadRequest("Invalid user or package")
+
+    try:
+        payment = initiate_yoo_payment(user=user, package=package, phone=phone)
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    return JsonResponse({
+        "success": True,
+        "payment_id": payment.id,
+        "reference": payment.reference,
+        "status": payment.status,
+        "amount": str(payment.amount),
+        "message": "Please approve the payment on your phone.",
+    })
+
+
+@csrf_exempt
+def yoo_ipn(request):
+    """
+    Yo! success IPN — URL-encoded form data POST.
+    Fields: external_ref, network_ref, msisdn, amount, narrative, date_time, signature
+    """
+    if request.method != "POST":
+        return HttpResponse("OK")
+
+    try:
+        body = request.body.decode("utf-8")
+        params = {k: v[0] for k, v in parse_qs(body).items()}
+    except Exception as e:
+        logger.error("Yoo IPN parse error: %s", e)
+        return HttpResponse("OK")
+
+    logger.info("Yoo IPN received: %s", params)
+
+    raw_ref = params.get("external_ref", "")
+    network_ref = params.get("network_ref", "")
+    msisdn = params.get("msisdn", "")
+
+    if not raw_ref or not network_ref or not msisdn:
+        logger.warning("Yoo IPN missing fields: %s", params)
+        return HttpResponse("OK")
+
+    reference = restore_reference(raw_ref)
+
+    try:
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            payment = Payment.objects.select_for_update().get(reference=reference)
+            if payment.status == Payment.STATUS_SUCCESS:
+                return HttpResponse("OK")
+            confirm_payment(reference=reference, external_reference=network_ref)
+
+        try:
+            from bots.notifications import notify_payment_success
+            payment.refresh_from_db()
+            notify_payment_success(payment.user, payment.package, payment)
+        except Exception as e:
+            logger.error("Yoo IPN notification error: %s", e)
+
+    except Payment.DoesNotExist:
+        logger.error("Yoo IPN unknown reference: %s", reference)
+    except Exception as e:
+        logger.error("Yoo IPN error: %s", e)
+
+    return HttpResponse("OK")
+
+
+@csrf_exempt
+def yoo_failure_ipn(request):
+    """
+    Yo! failure IPN — URL-encoded form data POST.
+    Fields: failed_transaction_reference, transaction_init_date, verification
+    """
+    if request.method != "POST":
+        return HttpResponse("OK")
+
+    try:
+        body = request.body.decode("utf-8")
+        params = {k: v[0] for k, v in parse_qs(body).items()}
+    except Exception as e:
+        logger.error("Yoo failure IPN parse error: %s", e)
+        return HttpResponse("OK")
+
+    logger.info("Yoo failure IPN received: %s", params)
+
+    raw_ref = params.get("failed_transaction_reference", "")
+    if not raw_ref:
+        return HttpResponse("OK")
+
+    reference = restore_reference(raw_ref)
+
+    try:
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            payment = Payment.objects.select_for_update().get(reference=reference)
+            if payment.status != Payment.STATUS_PENDING:
+                return HttpResponse("OK")
+            payment.status = Payment.STATUS_FAILED
+            payment.save(update_fields=["status"])
+
+        try:
+            from bots.notifications import notify_payment_failed
+            notify_payment_failed(payment.user, payment.package, payment)
+        except Exception as e:
+            logger.error("Yoo failure IPN notification error: %s", e)
+
+    except Payment.DoesNotExist:
+        logger.error("Yoo failure IPN unknown reference: %s", reference)
+    except Exception as e:
+        logger.error("Yoo failure IPN error: %s", e)
+
+    return HttpResponse("OK")

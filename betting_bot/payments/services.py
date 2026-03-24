@@ -9,8 +9,9 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 
 from packages.models import Package
-from .models import Payment, PaymentProvider, PaymentProviderConfig
+from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider
 from .makypay import MakyPayClient, normalize_ug_phone
+from .yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,64 @@ def initiate_payment(user: User, package: Package, phone: str) -> Payment:
     )
 
     logger.info("MakyPay END ref=%s", reference)
+
+    return payment
+
+
+@transaction.atomic
+def initiate_yoo_payment(user: User, package: Package, phone: str) -> Payment:
+    """
+    Initiate a Yo! Payments USSD push collection.
+    """
+    provider = YooPaymentProvider.objects.filter(is_active=True).first()
+    if not provider:
+        raise ValueError("No active Yo! Payment provider configured.")
+
+    price_val = getattr(package, "price", None) or getattr(package, "amount", None)
+    if price_val is None:
+        raise ValueError("Package has no price field.")
+
+    amount = Decimal(str(price_val))
+    phone_normalized = normalize_yoo_phone(phone)
+
+    # Prevent duplicate pending within 2 minutes
+    recent = Payment.objects.filter(
+        user=user,
+        status=Payment.STATUS_PENDING,
+        provider_type=Payment.PROVIDER_YOO,
+        created_at__gte=timezone.now() - timezone.timedelta(minutes=2),
+    ).order_by("-created_at").first()
+    if recent:
+        return recent
+
+    reference = make_reference()  # UUID without hyphens
+
+    payment = Payment.objects.create(
+        user=user,
+        package=package,
+        provider=None,
+        provider_type=Payment.PROVIDER_YOO,
+        phone=phone_normalized,
+        amount=amount,
+        reference=reference,
+        status=Payment.STATUS_PENDING,
+    )
+
+    client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
+    result = client.collect(
+        phone=phone_normalized,
+        amount=int(amount),
+        reference=reference,
+        notification_url=provider.notification_url,
+        failure_url=provider.failure_url,
+    )
+
+    logger.info("Yoo collect result ref=%s result=%s", reference, result)
+
+    if result.get("yoo_status") == "FAILED":
+        payment.status = Payment.STATUS_FAILED
+        payment.save(update_fields=["status"])
+        raise ValueError(f"Yo! rejected payment: {result.get('error_message') or result.get('status_message')}")
 
     return payment
 

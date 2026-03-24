@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .dash-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); text-align: center; }
+  .dash-card .value { font-size: 2em; font-weight: bold; color: #417690; }
+  .dash-card .label { color: #666; font-size: 0.85em; margin-top: 4px; }
+  .dash-card.green .value { color: #28a745; }
+  .dash-card.orange .value { color: #fd7e14; }
+  .dash-card.red .value { color: #dc3545; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  th { background: #417690; color: #fff; padding: 10px 14px; text-align: left; }
+  td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  h2 { margin: 24px 0 12px; color: #333; }
+  .back-link { margin-bottom: 16px; display: inline-block; }
+</style>
+
+<a class="back-link" href="{% url 'admin:payments_payment_changelist' %}">← Back to Payments</a>
+
+<h1>📊 Revenue Dashboard</h1>
+
+<h2>💰 Revenue</h2>
+<div class="dash-grid">
+  <div class="dash-card green">
+    <div class="value">UGX {{ total_revenue|floatformat:0 }}</div>
+    <div class="label">Total Revenue</div>
+  </div>
+  <div class="dash-card green">
+    <div class="value">UGX {{ month_revenue|floatformat:0 }}</div>
+    <div class="label">This Month</div>
+  </div>
+  <div class="dash-card green">
+    <div class="value">UGX {{ today_revenue|floatformat:0 }}</div>
+    <div class="label">Today</div>
+  </div>
+</div>
+
+<h2>📦 Payments</h2>
+<div class="dash-grid">
+  <div class="dash-card green">
+    <div class="value">{{ total_payments }}</div>
+    <div class="label">Successful</div>
+  </div>
+  <div class="dash-card orange">
+    <div class="value">{{ pending_payments }}</div>
+    <div class="label">Pending</div>
+  </div>
+  <div class="dash-card red">
+    <div class="value">{{ failed_payments }}</div>
+    <div class="label">Failed</div>
+  </div>
+</div>
+
+<h2>👥 Subscribers</h2>
+<div class="dash-grid">
+  <div class="dash-card">
+    <div class="value">{{ active_subscribers }}</div>
+    <div class="label">Active Subscribers</div>
+  </div>
+  <div class="dash-card">
+    <div class="value">{{ new_today }}</div>
+    <div class="label">New Today</div>
+  </div>
+  <div class="dash-card">
+    <div class="value">{{ new_this_month }}</div>
+    <div class="label">New This Month</div>
+  </div>
+</div>
+
+<h2>📦 Revenue by Package</h2>
+<table>
+  <tr><th>Package</th><th>Payments</th><th>Revenue (UGX)</th></tr>
+  {% for p in per_package %}
+  <tr>
+    <td>{{ p.package__name }}</td>
+    <td>{{ p.count }}</td>
+    <td>{{ p.total|floatformat:0 }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="3">No data yet</td></tr>
+  {% endfor %}
+</table>
+
+<h2>📅 Last 7 Days</h2>
+<table>
+  <tr><th>Date</th><th>Payments</th><th>Revenue (UGX)</th></tr>
+  {% for d in daily %}
+  <tr>
+    <td>{{ d.day }}</td>
+    <td>{{ d.count }}</td>
+    <td>{{ d.total|floatformat:0 }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="3">No data yet</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
