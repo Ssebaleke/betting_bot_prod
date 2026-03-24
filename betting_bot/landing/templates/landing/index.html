@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -29,7 +30,7 @@
       min-height: 100vh;
     }
 
-    /* ── HERO ── */
+    /* HERO */
     .hero {
       background: linear-gradient(135deg, #0d0f14 0%, #111827 60%, #0a1a0f 100%);
       border-bottom: 1px solid var(--border);
@@ -73,7 +74,7 @@
     .stat-value { font-size: 24px; font-weight: 800; color: var(--gold); }
     .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-    /* ── MAIN ── */
+    /* MAIN */
     .container { max-width: 860px; margin: 0 auto; padding: 40px 20px 60px; }
 
     .section-title {
@@ -85,7 +86,7 @@
       margin-bottom: 16px;
     }
 
-    /* ── STEPS ── */
+    /* STEPS */
     .steps {
       display: flex;
       gap: 8px;
@@ -114,43 +115,21 @@
     .step.done .step-num { background: var(--green); border-color: var(--green); color: #000; }
     .step-divider { flex: 1; height: 1px; background: var(--border); min-width: 16px; }
 
-    /* ── PANELS ── */
+    /* PANELS */
     .panel { display: none; }
     .panel.active { display: block; }
 
-    /* ── CATEGORY GRID ── */
-    .category-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 14px;
-      margin-bottom: 8px;
-    }
-    .category-card {
-      background: var(--card);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 16px;
-      cursor: pointer;
-      transition: border-color .2s, transform .15s;
-      text-align: center;
-    }
-    .category-card:hover { border-color: var(--green-dim); transform: translateY(-2px); }
-    .category-card.selected { border-color: var(--green); background: rgba(0,200,83,.06); }
-    .category-icon { font-size: 28px; margin-bottom: 10px; }
-    .category-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .category-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
-
-    /* ── PACKAGE GRID ── */
+    /* PACKAGE GRID */
     .package-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 16px;
     }
     .package-card {
       background: var(--card);
       border: 2px solid var(--border);
       border-radius: var(--radius);
-      padding: 22px 18px;
+      padding: 24px 20px;
       cursor: pointer;
       transition: border-color .2s, transform .15s;
       position: relative;
@@ -164,13 +143,13 @@
       font-size: 9px; font-weight: 800; letter-spacing: 1px;
       padding: 3px 8px; border-radius: 0 0 6px 6px;
     }
-    .pkg-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-    .pkg-price { font-size: 26px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+    .pkg-name { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .pkg-price { font-size: 28px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
     .pkg-price span { font-size: 13px; font-weight: 500; color: var(--muted); }
     .pkg-duration { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
     .pkg-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
-    /* ── PHONE FORM ── */
+    /* PHONE FORM */
     .phone-card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -185,6 +164,7 @@
       padding: 12px 16px;
       margin-bottom: 22px;
       font-size: 14px;
+      line-height: 1.6;
     }
     .selected-summary strong { color: var(--green); }
     label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
@@ -213,7 +193,7 @@
       outline: none;
       color: var(--text);
       font-size: 16px;
-      padding: 14px 14px;
+      padding: 14px;
     }
     .phone-input-wrap input::placeholder { color: var(--muted); }
 
@@ -228,11 +208,10 @@
       padding: 15px;
       cursor: pointer;
       transition: opacity .2s, transform .15s;
-      letter-spacing: .3px;
     }
     .btn-pay:hover { opacity: .9; transform: translateY(-1px); }
     .btn-pay:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-    .btn-pay .spinner {
+    .spinner {
       display: inline-block;
       width: 16px; height: 16px;
       border: 2px solid rgba(0,0,0,.3);
@@ -257,7 +236,7 @@
     }
     .btn-back:hover { border-color: var(--text); color: var(--text); }
 
-    /* ── SUCCESS ── */
+    /* SUCCESS */
     .success-card {
       background: var(--card);
       border: 1px solid rgba(0,200,83,.3);
@@ -269,7 +248,7 @@
     .success-icon { font-size: 56px; margin-bottom: 16px; }
     .success-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: var(--green); }
     .success-card p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
-    .success-card .phone-highlight {
+    .phone-highlight {
       display: inline-block;
       background: rgba(0,200,83,.1);
       border: 1px solid rgba(0,200,83,.25);
@@ -281,7 +260,7 @@
       margin: 8px 0 16px;
     }
 
-    /* ── ERROR ── */
+    /* ERROR */
     .error-msg {
       background: rgba(255,68,68,.1);
       border: 1px solid rgba(255,68,68,.3);
@@ -294,17 +273,16 @@
     }
     .error-msg.show { display: block; }
 
-    /* ── LOADING SKELETON ── */
+    /* SKELETON */
     .skeleton {
       background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
       background-size: 200% 100%;
       animation: shimmer 1.4s infinite;
-      border-radius: 8px;
-      height: 100px;
+      border-radius: var(--radius);
+      height: 140px;
     }
     @keyframes shimmer { to { background-position: -200% 0; } }
 
-    /* ── FOOTER ── */
     footer {
       text-align: center;
       padding: 24px 20px;
@@ -323,7 +301,6 @@
 </head>
 <body>
 
-<!-- HERO -->
 <div class="hero">
   <div class="hero-badge">⚽ Live Predictions</div>
   <h1>Win More With<br><span>Expert Betting Tips</span></h1>
@@ -335,47 +312,34 @@
   </div>
 </div>
 
-<!-- MAIN -->
 <div class="container">
 
-  <!-- STEPS INDICATOR -->
+  <!-- STEPS -->
   <div class="steps" id="stepsBar">
     <div class="step active" id="step1">
       <div class="step-num">1</div>
-      <span class="step-label">Category</span>
+      <span class="step-label">Choose Package</span>
     </div>
     <div class="step-divider"></div>
     <div class="step" id="step2">
       <div class="step-num">2</div>
-      <span class="step-label">Package</span>
-    </div>
-    <div class="step-divider"></div>
-    <div class="step" id="step3">
-      <div class="step-num">3</div>
       <span class="step-label">Pay</span>
     </div>
   </div>
 
-  <!-- PANEL 1: CATEGORIES -->
-  <div class="panel active" id="panelCategory">
-    <div class="section-title">Step 1 — Choose a Category</div>
-    <div class="category-grid" id="categoryGrid">
+  <!-- PANEL 1: PACKAGES -->
+  <div class="panel active" id="panelPackage">
+    <div class="section-title">Choose a Package</div>
+    <div class="package-grid" id="packageGrid">
       <div class="skeleton"></div>
       <div class="skeleton"></div>
       <div class="skeleton"></div>
     </div>
   </div>
 
-  <!-- PANEL 2: PACKAGES -->
-  <div class="panel" id="panelPackage">
-    <button class="btn-back" onclick="goBack(1)">← Back</button>
-    <div class="section-title" id="packageSectionTitle">Step 2 — Choose a Package</div>
-    <div class="package-grid" id="packageGrid"></div>
-  </div>
-
-  <!-- PANEL 3: PHONE + PAY -->
+  <!-- PANEL 2: PHONE + PAY -->
   <div class="panel" id="panelPhone">
-    <button class="btn-back" onclick="goBack(2)">← Back</button>
+    <button class="btn-back" onclick="showPanel(1)">← Back</button>
     <div class="phone-card">
       <div class="selected-summary" id="selectedSummary"></div>
       <div class="error-msg" id="errorMsg"></div>
@@ -390,14 +354,14 @@
     </div>
   </div>
 
-  <!-- PANEL 4: SUCCESS -->
+  <!-- PANEL 3: SUCCESS -->
   <div class="panel" id="panelSuccess">
     <div class="success-card">
       <div class="success-icon">✅</div>
       <h2>Payment Received!</h2>
       <p>Your subscription is now active.</p>
       <div class="phone-highlight" id="successPhone"></div>
-      <p>Predictions will be sent to your phone via SMS every day. An SMS confirmation has been sent to you.</p>
+      <p>Predictions will be sent to your phone via SMS every day.<br>An SMS confirmation has been sent to you.</p>
       <p style="margin-top:16px; font-size:12px;">Bet Responsibly 🍀</p>
     </div>
   </div>
@@ -409,68 +373,41 @@
 </footer>
 
 <script>
-  const CATEGORY_ICONS = ["📅","📆","🗓️","⚡","🔥","💎","🏆","⭐"];
-  let categories = [];
-  let selectedCategory = null;
   let selectedPackage = null;
 
-  // ── Load categories on page load ──
-  fetch("/api/categories/")
+  fetch("/packages/")
     .then(r => r.json())
-    .then(data => {
-      categories = data.categories;
-      renderCategories();
-    })
+    .then(data => renderPackages(data.packages))
     .catch(() => {
-      document.getElementById("categoryGrid").innerHTML =
+      document.getElementById("packageGrid").innerHTML =
         '<p style="color:var(--danger);font-size:14px;">Failed to load packages. Please refresh.</p>';
     });
 
-  function renderCategories() {
-    const grid = document.getElementById("categoryGrid");
-    if (!categories.length) {
+  function renderPackages(packages) {
+    const grid = document.getElementById("packageGrid");
+    if (!packages.length) {
       grid.innerHTML = '<p style="color:var(--muted);font-size:14px;">No packages available right now.</p>';
       return;
     }
-    grid.innerHTML = categories.map((cat, i) => `
-      <div class="category-card" onclick="selectCategory(${cat.id})">
-        <div class="category-icon">${CATEGORY_ICONS[i % CATEGORY_ICONS.length]}</div>
-        <div class="category-name">${esc(cat.name)}</div>
-        <div class="category-desc">${esc(cat.description) || cat.packages.length + " package" + (cat.packages.length !== 1 ? "s" : "")}</div>
-      </div>
-    `).join("");
-  }
-
-  function selectCategory(id) {
-    selectedCategory = categories.find(c => c.id === id);
-    renderPackages();
-    showPanel(2);
-  }
-
-  function renderPackages() {
-    const grid = document.getElementById("packageGrid");
-    const pkgs = selectedCategory.packages;
-    document.getElementById("packageSectionTitle").textContent =
-      `Step 2 — Choose a ${selectedCategory.name} Package`;
-
-    grid.innerHTML = pkgs.map((p, i) => `
-      <div class="package-card ${i === 1 && pkgs.length > 1 ? 'popular' : ''}" onclick="selectPackage(${p.id}, '${esc(p.name)}', '${p.price}', ${p.duration_days})">
+    grid.innerHTML = packages.map((p, i) => `
+      <div class="package-card ${i === 1 && packages.length > 2 ? 'popular' : ''}"
+           onclick="selectPackage(${p.id}, '${esc(p.name)}', '${p.price}', ${p.duration_days})">
         <div class="pkg-name">${esc(p.name)}</div>
         <div class="pkg-price">UGX ${fmt(p.price)}<span> /sub</span></div>
-        <div class="pkg-duration">${p.duration_days} day${p.duration_days !== 1 ? "s" : ""}</div>
-        <div class="pkg-desc">${esc(p.description) || "Daily predictions delivered via SMS"}</div>
+        <div class="pkg-duration">${p.duration_days} day${p.duration_days !== 1 ? 's' : ''}</div>
+        <div class="pkg-desc">${esc(p.description) || 'Daily predictions delivered via SMS'}</div>
       </div>
-    `).join("");
+    `).join('');
   }
 
   function selectPackage(id, name, price, days) {
     selectedPackage = { id, name, price, days };
     document.getElementById("selectedSummary").innerHTML =
-      `<strong>${esc(selectedCategory.name)} – ${esc(name)}</strong><br>` +
-      `UGX ${fmt(price)} &nbsp;·&nbsp; ${days} day${days !== 1 ? "s" : ""}`;
+      `<strong>${esc(name)}</strong><br>` +
+      `UGX ${fmt(price)} &nbsp;·&nbsp; ${days} day${days !== 1 ? 's' : ''}`;
     document.getElementById("phoneInput").value = "";
     hideError();
-    showPanel(3);
+    showPanel(2);
   }
 
   function submitPayment() {
@@ -489,14 +426,17 @@
 
     fetch("/pay/initiate/web/", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie("csrftoken") },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}"
+      },
       body: JSON.stringify({ phone: "256" + phone, package_id: selectedPackage.id })
     })
     .then(r => r.json())
     .then(data => {
       if (data.success) {
         document.getElementById("successPhone").textContent = "+256" + phone;
-        showPanel(4);
+        showPanel(3);
       } else {
         showError(data.error || "Payment failed. Please try again.");
         btn.disabled = false;
@@ -510,28 +450,24 @@
     });
   }
 
-  // ── Panel navigation ──
   function showPanel(n) {
-    ["panelCategory","panelPackage","panelPhone","panelSuccess"].forEach((id, i) => {
+    ["panelPackage", "panelPhone", "panelSuccess"].forEach((id, i) => {
       document.getElementById(id).classList.toggle("active", i + 1 === n);
     });
     updateSteps(n);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function goBack(n) { showPanel(n); }
-
   function updateSteps(active) {
-    [1,2,3].forEach(i => {
+    [1, 2].forEach(i => {
       const el = document.getElementById("step" + i);
-      el.classList.remove("active","done");
+      el.classList.remove("active", "done");
       if (i < active) el.classList.add("done");
       else if (i === active) el.classList.add("active");
     });
-    document.getElementById("stepsBar").style.display = active === 4 ? "none" : "flex";
+    document.getElementById("stepsBar").style.display = active === 3 ? "none" : "flex";
   }
 
-  // ── Helpers ──
   function showError(msg) {
     const el = document.getElementById("errorMsg");
     el.textContent = msg;
@@ -539,18 +475,11 @@
   }
   function hideError() { document.getElementById("errorMsg").classList.remove("show"); }
 
-  function fmt(price) {
-    return Number(price).toLocaleString("en-UG");
-  }
+  function fmt(price) { return Number(price).toLocaleString("en-UG"); }
 
   function esc(str) {
     if (!str) return "";
     return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  }
-
-  function getCookie(name) {
-    const v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
-    return v ? v.pop() : "";
   }
 </script>
 </body>

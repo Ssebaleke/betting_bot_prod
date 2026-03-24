@@ -1,7 +1,7 @@
 from django.urls import path
-from .views import index, categories_api
+from .views import index, packages_api
 
 urlpatterns = [
     path("", index, name="landing"),
-    path("api/categories/", categories_api, name="landing_categories"),
+    path("packages/", packages_api, name="landing_packages"),
 ]

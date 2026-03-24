@@ -129,9 +129,10 @@ def makypay_webhook(request):
         try:
             confirm_payment(reference=reference, external_reference=external_reference)
             try:
-                from bots.notifications import notify_payment_success
                 payment = Payment.objects.get(reference=reference)
-                notify_payment_success(payment.user, payment.package, payment)
+                if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
+                    from bots.notifications import notify_payment_success
+                    notify_payment_success(payment.user, payment.package, payment)
             except Exception as e:
                 logger.error(f"Failed to send success notification: {e}")
         except Payment.DoesNotExist:
@@ -192,9 +193,10 @@ def yoo_ipn(request):
                 return HttpResponse("OK")
             confirm_payment(reference=reference, external_reference=network_ref)
         try:
-            from bots.notifications import notify_payment_success
             payment.refresh_from_db()
-            notify_payment_success(payment.user, payment.package, payment)
+            if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
+                from bots.notifications import notify_payment_success
+                notify_payment_success(payment.user, payment.package, payment)
         except Exception as e:
             logger.error("Yoo IPN notification error: %s", e)
     except Payment.DoesNotExist:
