@@ -1,0 +1,37 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Subscribers{% endblock %}
+{% block nav_subscribers %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>👥 Subscribers</h1>
+  <div style="font-size:13px; color:var(--muted);">{{ subscribers|length }} total</div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Phone / User</th><th>Package</th><th>Started</th><th>Expires</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for sub in subscribers %}
+        <tr>
+          <td>
+            <strong>{{ sub.user.first_name|default:sub.user.username }}</strong>
+            <div style="font-size:11px; color:var(--muted);">{{ sub.user.username }}</div>
+          </td>
+          <td>{{ sub.package.name }}</td>
+          <td style="color:var(--muted);">{{ sub.start_date|date:"M d, Y" }}</td>
+          <td style="color:var(--muted);">{{ sub.end_date|date:"M d, Y" }}</td>
+          <td>
+            {% if sub.is_active %}<span class="badge badge-green">Active</span>
+            {% else %}<span class="badge badge-muted">Expired</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No subscribers yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

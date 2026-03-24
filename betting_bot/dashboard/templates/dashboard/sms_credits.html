@@ -1,0 +1,43 @@
+{% extends "dashboard/base.html" %}
+{% block title %}SMS Credits{% endblock %}
+{% block nav_sms %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📱 SMS Credits</h1>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; max-width:800px;">
+  <div class="card">
+    <div style="font-size:14px; font-weight:700; margin-bottom:16px;">Current SMS Config</div>
+    {% if config %}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px;">API Key</div>
+        <div style="font-family:monospace; font-size:13px; background:var(--surface); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+          {{ config.api_key|slice:":8" }}••••••••••••
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px;">Status</div>
+        <span class="badge badge-green">Active</span>
+      </div>
+    </div>
+    {% else %}
+    <div style="color:var(--muted); font-size:14px;">No SMS config set up yet. Contact your developer to configure UGSMS.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div style="font-size:14px; font-weight:700; margin-bottom:16px;">Buy SMS Credits</div>
+    <p style="color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:16px;">
+      To top up your SMS credits, contact us directly. We'll recharge your UGSMS account and update the API key if needed.
+    </p>
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px;">
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Contact Developer</div>
+      <div style="font-size:14px; font-weight:600;">📞 +256 XXX XXX XXX</div>
+      <div style="font-size:14px; font-weight:600; margin-top:4px;">✉️ admin@bettipspro.com</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

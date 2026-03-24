@@ -1,0 +1,46 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Predictions{% endblock %}
+{% block nav_predictions %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🎯 Predictions</h1>
+  <a href="{% url 'dashboard:prediction_create' %}" class="btn btn-green">+ Add Prediction</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Match</th><th>Prediction</th><th>Odds</th><th>Package</th><th>Send Date</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for pred in predictions %}
+        <tr>
+          <td>
+            <strong>{{ pred.home_team }} vs {{ pred.away_team }}</strong>
+            <div style="font-size:11px; color:var(--muted);">{{ pred.match_date }} {{ pred.match_time }}</div>
+          </td>
+          <td>{{ pred.prediction }}</td>
+          <td><span class="badge badge-gold" style="background:rgba(255,214,0,.15); color:var(--gold);">{{ pred.odds }}</span></td>
+          <td style="color:var(--muted);">{{ pred.package.name }}</td>
+          <td style="color:var(--muted);">{{ pred.send_date }} {{ pred.send_time }}</td>
+          <td>
+            {% if pred.is_sent %}<span class="badge badge-blue">Sent</span>
+            {% elif pred.is_active %}<span class="badge badge-green">Scheduled</span>
+            {% else %}<span class="badge badge-muted">Inactive</span>{% endif %}
+          </td>
+          <td style="display:flex; gap:8px;">
+            <a href="{% url 'dashboard:prediction_edit' pred.pk %}" class="btn btn-outline btn-sm">Edit</a>
+            <form method="post" action="{% url 'dashboard:prediction_delete' pred.pk %}" onsubmit="return confirm('Delete this prediction?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="color:var(--muted); text-align:center; padding:24px;">No predictions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

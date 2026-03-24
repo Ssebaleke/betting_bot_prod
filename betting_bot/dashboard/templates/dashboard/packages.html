@@ -1,0 +1,44 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Packages{% endblock %}
+{% block nav_packages %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📦 Packages</h1>
+  <a href="{% url 'dashboard:package_create' %}" class="btn btn-green">+ New Package</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Duration</th><th>Level</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for pkg in packages %}
+        <tr>
+          <td><strong>{{ pkg.name }}</strong></td>
+          <td style="color:var(--muted);">{{ pkg.category.name|default:"—" }}</td>
+          <td>UGX {{ pkg.price|floatformat:0 }}</td>
+          <td>{{ pkg.duration_days }} days</td>
+          <td>{{ pkg.level }}</td>
+          <td>
+            {% if pkg.is_active %}<span class="badge badge-green">Active</span>
+            {% else %}<span class="badge badge-muted">Inactive</span>{% endif %}
+          </td>
+          <td style="display:flex; gap:8px;">
+            <a href="{% url 'dashboard:package_edit' pkg.pk %}" class="btn btn-outline btn-sm">Edit</a>
+            <form method="post" action="{% url 'dashboard:package_toggle' pkg.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm {% if pkg.is_active %}btn-danger{% else %}btn-green{% endif %}">
+                {% if pkg.is_active %}Disable{% else %}Enable{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="color:var(--muted); text-align:center; padding:24px;">No packages yet. Create one!</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ action }} Prediction{% endblock %}
+{% block nav_predictions %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🎯 {{ action }} Prediction</h1>
+  <a href="{% url 'dashboard:predictions' %}" class="btn btn-outline">← Back</a>
+</div>
+
+<div class="card" style="max-width:700px;">
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Home Team</label>
+        <input type="text" name="home_team" value="{{ pred.home_team|default:'' }}" placeholder="e.g. Arsenal" required/>
+      </div>
+      <div class="form-group">
+        <label>Away Team</label>
+        <input type="text" name="away_team" value="{{ pred.away_team|default:'' }}" placeholder="e.g. Chelsea" required/>
+      </div>
+      <div class="form-group">
+        <label>Prediction</label>
+        <input type="text" name="prediction" value="{{ pred.prediction|default:'' }}" placeholder="e.g. Arsenal to Win" required/>
+      </div>
+      <div class="form-group">
+        <label>Odds</label>
+        <input type="number" step="0.01" name="odds" value="{{ pred.odds|default:'' }}" placeholder="1.85" required/>
+      </div>
+      <div class="form-group">
+        <label>Match Date</label>
+        <input type="date" name="match_date" value="{{ pred.match_date|default:'' }}" required/>
+      </div>
+      <div class="form-group">
+        <label>Match Time</label>
+        <input type="time" name="match_time" value="{{ pred.match_time|default:'' }}" required/>
+      </div>
+      <div class="form-group">
+        <label>Send Date</label>
+        <input type="date" name="send_date" value="{{ pred.send_date|default:'' }}" required/>
+      </div>
+      <div class="form-group">
+        <label>Send Time</label>
+        <input type="time" name="send_time" value="{{ pred.send_time|default:'08:00' }}"/>
+      </div>
+      <div class="form-group">
+        <label>Package</label>
+        <select name="package" required>
+          <option value="">— Select Package —</option>
+          {% for pkg in packages %}
+          <option value="{{ pkg.pk }}" {% if pred.package_id == pkg.pk %}selected{% endif %}>{{ pkg.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-green">{{ action }} Prediction</button>
+      <a href="{% url 'dashboard:predictions' %}" class="btn btn-outline">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

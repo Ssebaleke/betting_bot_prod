@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "predictions",
     "api",
     "landing",
+    "dashboard",
 
 ]
 
