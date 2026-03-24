@@ -36,6 +36,7 @@ jobs:
             sleep 15
 
             echo "📦 Running migrations..."
+            docker exec bet-bot-web python manage.py migrate --fake predictions 0002_remove_prediction_confidence
             docker exec bet-bot-web python manage.py migrate --noinput
 
             echo "🗂️ Collecting static files..."
