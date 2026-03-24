@@ -22,6 +22,14 @@ WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", "")
 
 # UG-SMS
 UG_SMS_SENDER_ID = os.environ.get("UG_SMS_SENDER_ID", "BetTips")
+UG_SMS_API_KEY = os.environ.get("UG_SMS_API_KEY", "")
+
+# Yo! Payments
+YOO_API_USERNAME = os.environ.get("YOO_API_USERNAME", "")
+YOO_API_PASSWORD = os.environ.get("YOO_API_PASSWORD", "")
+YOO_ENVIRONMENT = os.environ.get("YOO_ENVIRONMENT", "LIVE")  # SANDBOX or LIVE
+YOO_NOTIFICATION_URL = os.environ.get("YOO_NOTIFICATION_URL", "")
+YOO_FAILURE_URL = os.environ.get("YOO_FAILURE_URL", "")
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 

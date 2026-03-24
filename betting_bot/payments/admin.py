@@ -54,6 +54,7 @@ class SMSTopUpAdmin(admin.ModelAdmin):
 
 
 @admin.register(PaymentProvider)
+class PaymentProviderAdmin(admin.ModelAdmin):
     list_display = ("name", "base_url", "is_active")
     list_editable = ("is_active",)
     search_fields = ("name",)

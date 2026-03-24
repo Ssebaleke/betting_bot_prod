@@ -1,10 +1,9 @@
 """
-UGSMS v2 client.
-API key stored in SMSConfig model, set via Admin > SMS Config.
-Docs: https://www.ugsms.com
+UGSMS v2 client — API key read from UG_SMS_API_KEY env var.
 """
 import logging
 import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +20,16 @@ def _normalize_phone(phone: str) -> str:
 
 
 def _get_api_key() -> str | None:
+    key = getattr(settings, "UG_SMS_API_KEY", "").strip()
+    if key:
+        return key
+    # fallback: check DB config
     from payments.models import SMSConfig
     config = SMSConfig.objects.filter(is_active=True).first()
-    if not config:
-        logger.error("No active SMSConfig found. Go to Admin > SMS Config and add your UGSMS API key.")
-        return None
-    return config.api_key
+    if config:
+        return config.api_key
+    logger.error("No UGSMS API key found. Set UG_SMS_API_KEY in .env")
+    return None
 
 
 def send_sms(phone: str, message: str) -> bool:

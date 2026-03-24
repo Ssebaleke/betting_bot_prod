@@ -130,10 +130,26 @@ def initiate_payment(user: User, package: Package, phone: str, delivery_channel:
 def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
     """
     Initiate a Yo! Payments USSD push collection.
+    Credentials read from env vars first, fall back to YooPaymentProvider DB record.
     """
-    provider = YooPaymentProvider.objects.filter(is_active=True).first()
-    if not provider:
-        raise ValueError("No active Yo! Payment provider configured.")
+    from django.conf import settings
+
+    api_username = getattr(settings, "YOO_API_USERNAME", "").strip()
+    api_password = getattr(settings, "YOO_API_PASSWORD", "").strip()
+    notification_url = getattr(settings, "YOO_NOTIFICATION_URL", "").strip()
+    failure_url = getattr(settings, "YOO_FAILURE_URL", "").strip()
+
+    if not api_username or not api_password:
+        provider = YooPaymentProvider.objects.filter(is_active=True).first()
+        if not provider:
+            raise ValueError("No Yoo credentials found. Set YOO_API_USERNAME and YOO_API_PASSWORD in .env")
+        api_username = provider.api_username
+        api_password = provider.api_password
+        notification_url = notification_url or provider.notification_url
+        failure_url = failure_url or provider.failure_url
+
+    if not notification_url or not failure_url:
+        raise ValueError("Set YOO_NOTIFICATION_URL and YOO_FAILURE_URL in .env")
 
     price_val = getattr(package, "price", None) or getattr(package, "amount", None)
     if price_val is None:
@@ -166,13 +182,13 @@ def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_chan
         status=Payment.STATUS_PENDING,
     )
 
-    client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
+    client = YooClient(api_username=api_username, api_password=api_password)
     result = client.collect(
         phone=phone_normalized,
         amount=int(amount),
         reference=reference,
-        notification_url=provider.notification_url,
-        failure_url=provider.failure_url,
+        notification_url=notification_url,
+        failure_url=failure_url,
     )
 
     logger.info("Yoo collect result ref=%s result=%s", reference, result)
