@@ -21,8 +21,6 @@ DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", "")
 
 # UG-SMS
-UG_SMS_USERNAME = os.environ.get("UG_SMS_USERNAME", "")
-UG_SMS_PASSWORD = os.environ.get("UG_SMS_PASSWORD", "")
 UG_SMS_SENDER_ID = os.environ.get("UG_SMS_SENDER_ID", "BetTips")
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")

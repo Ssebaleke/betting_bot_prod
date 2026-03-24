@@ -290,5 +290,5 @@ def landing_initiate_payment(request):
         "success": True,
         "reference": payment.reference,
         "amount": str(payment.amount),
-        "message": "USSD prompt sent to your phone. Approve to complete payment."
+        "message": "USSD prompt sent. Please approve on your phone to complete payment."
     })

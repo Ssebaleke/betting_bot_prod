@@ -16,10 +16,10 @@ from .models import (
 
 @admin.register(SMSConfig)
 class SMSConfigAdmin(admin.ModelAdmin):
-    list_display = ("__str__", "sender_id", "is_active", "created_at")
+    list_display = ("__str__", "is_active", "created_at")
     list_editable = ("is_active",)
     fieldsets = (
-        ("UGSMS v2 Credentials", {"fields": ("api_key", "sender_id")}),
+        ("UGSMS v2 Credentials", {"fields": ("api_key",)}),
         ("Status", {"fields": ("is_active",)}),
     )
 

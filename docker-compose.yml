@@ -40,6 +40,20 @@ services:
       - db
     restart: unless-stopped
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: betting_bot/Docker/Dockerfile
+    container_name: bet-bot-scheduler
+    command: sh -c "echo '*/15 * * * * cd /app/betting_bot && python manage.py send_daily_predictions >> /var/log/predictions.log 2>&1' > /etc/crontabs/root && echo '0 * * * * cd /app/betting_bot && python manage.py check_subscriptions >> /var/log/subscriptions.log 2>&1' >> /etc/crontabs/root && crond -f"
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/betting_bot
+    depends_on:
+      - db
+    restart: unless-stopped
+
 volumes:
   postgres_data:
 

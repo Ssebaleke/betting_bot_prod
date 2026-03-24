@@ -4,8 +4,7 @@ from packages.models import Package
 
 
 class SMSConfig(models.Model):
-    api_key = models.CharField(max_length=255, help_text="UGSMS v2 API Key")
-    sender_id = models.CharField(max_length=20, default="BetTips", help_text="Sender name shown on SMS")
+    api_key = models.CharField(max_length=255, help_text="UGSMS v2 API Key from your UGSMS dashboard")
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

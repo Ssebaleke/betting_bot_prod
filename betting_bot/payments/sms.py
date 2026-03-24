@@ -1,5 +1,6 @@
 """
-UGSMS v2 client - API key loaded from SMSConfig model (set via admin).
+UGSMS v2 client.
+API key stored in SMSConfig model, set via Admin > SMS Config.
 Docs: https://www.ugsms.com
 """
 import logging
@@ -19,17 +20,17 @@ def _normalize_phone(phone: str) -> str:
     return phone
 
 
-def _get_config():
+def _get_api_key() -> str | None:
     from payments.models import SMSConfig
     config = SMSConfig.objects.filter(is_active=True).first()
     if not config:
-        logger.error("No active SMSConfig found. Add one in Admin > SMS Config.")
-        return None, None
-    return config.api_key, config.sender_id
+        logger.error("No active SMSConfig found. Go to Admin > SMS Config and add your UGSMS API key.")
+        return None
+    return config.api_key
 
 
 def send_sms(phone: str, message: str) -> bool:
-    api_key, sender_id = _get_config()
+    api_key = _get_api_key()
     if not api_key:
         return False
 
@@ -46,7 +47,7 @@ def send_sms(phone: str, message: str) -> bool:
         if data.get("success"):
             logger.info("SMS sent to %s", phone)
             return True
-        logger.error("UGSMS error: %s", data)
+        logger.error("UGSMS error response: %s", data)
         return False
     except Exception as e:
         logger.error("UGSMS request failed for %s: %s", phone, e)

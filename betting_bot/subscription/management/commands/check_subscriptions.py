@@ -12,6 +12,8 @@ import logging
 
 from subscription.models import Subscription
 from bots.notifications import send_telegram_message
+from payments.models import Payment
+from payments.sms import send_sms
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,21 @@ class Command(BaseCommand):
         
         self.deactivate_expired(now)
         self.send_expiry_reminders(now)
+
+    def _notify(self, user, message):
+        """Send notification via correct channel based on last payment."""
+        latest = Payment.objects.filter(
+            user=user, status=Payment.STATUS_SUCCESS
+        ).order_by("-created_at").first()
+
+        if latest and latest.delivery_channel == Payment.CHANNEL_SMS:
+            plain = message.replace("*", "").replace("_", "")
+            send_sms(latest.phone, plain)
+        else:
+            try:
+                send_telegram_message(user.telegramprofile.telegram_id, message)
+            except Exception as e:
+                logger.error("Telegram notify failed for user=%s: %s", user.id, e)
 
     def deactivate_expired(self, now):
         """Deactivate expired subscriptions and notify users"""
@@ -40,16 +57,13 @@ class Command(BaseCommand):
 
             # Notify user
             try:
-                telegram_profile = subscription.user.telegramprofile
                 message = (
-                    "⏰ *Subscription Expired*\n\n"
-                    f"📦 Package: {subscription.package.name}\n"
-                    f"📅 Expired: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
-                    "You no longer have access to daily predictions.\n\n"
-                    "🔄 *Renew your subscription to continue receiving predictions!*\n"
-                    "Use /start to subscribe again."
+                    "Subscription Expired\n"
+                    f"Package: {subscription.package.name}\n"
+                    f"Expired: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
+                    "Renew to keep receiving predictions."
                 )
-                send_telegram_message(telegram_profile.telegram_id, message)
+                self._notify(subscription.user, message)
                 self.stdout.write(self.style.WARNING(
                     f"⏰ Expired & notified: {subscription.user.username}"
                 ))
@@ -70,16 +84,13 @@ class Command(BaseCommand):
         count = 0
         for subscription in expiring_soon:
             try:
-                telegram_profile = subscription.user.telegramprofile
                 message = (
-                    "⚠️ *Subscription Expiring Soon!*\n\n"
-                    f"📦 Package: {subscription.package.name}\n"
-                    f"📅 Expires: {subscription.end_date.strftime('%B %d, %Y at %H:%M')}\n\n"
-                    "Your subscription expires *tomorrow*!\n\n"
-                    "🔄 *Renew now to keep receiving daily predictions.*\n"
-                    "Use /start to renew."
+                    "Subscription Expiring Tomorrow\n"
+                    f"Package: {subscription.package.name}\n"
+                    f"Expires: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
+                    "Renew now to keep receiving daily predictions."
                 )
-                send_telegram_message(telegram_profile.telegram_id, message)
+                self._notify(subscription.user, message)
                 count += 1
                 self.stdout.write(self.style.WARNING(
                     f"⚠️ Reminder sent: {subscription.user.username} (expires tomorrow)"

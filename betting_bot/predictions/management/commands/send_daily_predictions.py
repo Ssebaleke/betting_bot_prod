@@ -110,8 +110,12 @@ class Command(BaseCommand):
                 failed_count += 1
                 logger.error(f"Error sending to {subscription.user.username}: {e}")
 
-        # Mark predictions as sent so they don't get sent again
-        predictions.update(is_sent=True)
+        # Mark predictions as sent only if at least one was delivered
+        if sent_count > 0:
+            predictions.update(is_sent=True)
+        elif failed_count > 0:
+            self.stdout.write(self.style.ERROR("All sends failed - predictions NOT marked as sent, will retry next run."))
+            return
 
         self.stdout.write(self.style.SUCCESS(
             f"\n📊 Summary:\n"
