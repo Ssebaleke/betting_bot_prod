@@ -73,11 +73,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Deactivated {count} expired subscriptions"))
 
     def send_expiry_reminders(self, now):
-        """Send reminder to users whose subscription expires in 1 day"""
+        """Send reminder to users whose subscription expires in 1 day — only once."""
         reminder_time = now + timedelta(days=1)
 
         expiring_soon = Subscription.objects.filter(
             is_active=True,
+            reminder_sent=False,
             end_date__date=reminder_time.date()
         ).select_related('user', 'package')
 
@@ -91,6 +92,8 @@ class Command(BaseCommand):
                     "Renew now to keep receiving daily predictions. Use /start to renew."
                 )
                 self._notify(subscription.user, message)
+                subscription.reminder_sent = True
+                subscription.save(update_fields=['reminder_sent'])
                 count += 1
                 self.stdout.write(self.style.WARNING(
                     f"⚠️ Reminder sent: {subscription.user.username} (expires tomorrow)"

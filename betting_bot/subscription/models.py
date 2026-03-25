@@ -31,6 +31,8 @@ class Subscription(models.Model):
         default=True
     )
 
+    reminder_sent = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(
         auto_now_add=True
     )
