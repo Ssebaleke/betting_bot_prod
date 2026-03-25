@@ -33,6 +33,12 @@
                 {% if pkg.is_active %}Disable{% else %}Enable{% endif %}
               </button>
             </form>
+            <form method="post" action="{% url 'dashboard:package_delete' pkg.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete package {{ pkg.name }}? This cannot be undone.')">
+                Delete
+              </button>
+            </form>
           </td>
         </tr>
         {% empty %}

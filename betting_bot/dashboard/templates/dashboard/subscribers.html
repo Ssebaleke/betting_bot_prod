@@ -6,7 +6,10 @@
 {% block content %}
 <div class="page-header">
   <h1>👥 Subscribers</h1>
-  <div style="font-size:13px; color:var(--muted);">{{ total }} total</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span style="font-size:13px; color:var(--muted);">{{ total }} total</span>
+    <a href="{% url 'dashboard:subscriber_add' %}" class="btn btn-green">+ Add Subscriber</a>
+  </div>
 </div>
 
 <div class="card">
@@ -46,6 +49,10 @@
                 onclick="return confirm('{% if sub.is_active %}Suspend this subscriber?{% else %}Activate this subscriber?{% endif %}')">
                 {% if sub.is_active %}Suspend{% else %}Activate{% endif %}
               </button>
+            </form>
+            <form method="post" action="{% url 'dashboard:subscriber_delete' sub.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this subscriber permanently?')">Delete</button>
             </form>
           </td>
         </tr>

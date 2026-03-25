@@ -225,6 +225,54 @@ def prediction_delete(request, pk):
 
 
 @owner_required
+def package_delete(request, pk):
+    pkg = get_object_or_404(Package, pk=pk)
+    if request.method == "POST":
+        try:
+            pkg.delete()
+            messages.success(request, f"Package '{pkg.name}' deleted.")
+        except Exception as e:
+            messages.error(request, f"Cannot delete: {e}")
+    return redirect("dashboard:packages")
+
+
+@owner_required
+def subscriber_add(request):
+    packages_list = Package.objects.filter(is_active=True)
+    if request.method == "POST":
+        phone = (request.POST.get("phone") or "").strip()
+        package_id = request.POST.get("package")
+        duration_days = request.POST.get("duration_days")
+        if not phone or not package_id or not duration_days:
+            messages.error(request, "Phone, package and duration are required.")
+        else:
+            try:
+                from payments.makypay import normalize_ug_phone
+                from django.contrib.auth.models import User
+                normalized = normalize_ug_phone(phone)
+                username = f"web_{normalized}"
+                user, _ = User.objects.get_or_create(username=username, defaults={"first_name": normalized})
+                package = get_object_or_404(Package, pk=package_id)
+                start = timezone.now()
+                end = start + timezone.timedelta(days=int(duration_days))
+                Subscription.objects.create(user=user, package=package, start_date=start, end_date=end, is_active=True)
+                messages.success(request, f"Subscriber {normalized} added to {package.name}.")
+                return redirect("dashboard:subscribers")
+            except Exception as e:
+                messages.error(request, f"Error: {e}")
+    return render(request, "dashboard/subscriber_add.html", {"packages": packages_list})
+
+
+@owner_required
+def subscriber_delete(request, pk):
+    sub = get_object_or_404(Subscription, pk=pk)
+    if request.method == "POST":
+        sub.delete()
+        messages.success(request, "Subscriber removed.")
+    return redirect("dashboard:subscribers")
+
+
+@owner_required
 def subscribers(request):
     from django.core.paginator import Paginator
     subs_qs = Subscription.objects.select_related("user", "package").order_by("-created_at")
