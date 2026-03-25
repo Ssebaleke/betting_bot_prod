@@ -35,7 +35,7 @@
       </div>
       <div class="form-group">
         <label>Match Time</label>
-        <input type="time" name="match_time" value="{{ pred.match_time|default:'' }}" required/>
+        <input type="time" name="match_time" value="{{ pred.match_time|time:'H:i'|default:'' }}" required/>
       </div>
       <div class="form-group">
         <label>Send Date</label>
@@ -43,7 +43,7 @@
       </div>
       <div class="form-group">
         <label>Send Time</label>
-        <input type="time" name="send_time" value="{{ pred.send_time|default:'08:00' }}"/>
+        <input type="time" name="send_time" value="{{ pred.send_time|time:'H:i'|default:'08:00' }}"/>
       </div>
       <div class="form-group">
         <label>Package</label>
