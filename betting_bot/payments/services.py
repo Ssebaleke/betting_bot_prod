@@ -224,14 +224,18 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
         except Exception as e:
             logger.error("SMS confirmation failed for ref=%s: %s", reference, e)
 
-    # Send today's predictions if already sent for this package
+    # Send today's predictions for matches that haven't kicked off yet
     try:
         from predictions.models import Prediction
+        local_now = timezone.localtime(timezone.now())
+        today = local_now.date()
+        current_time = local_now.time()
 
         today_predictions = list(Prediction.objects.filter(
             is_active=True,
             is_sent=True,
-            send_date=timezone.localtime(timezone.now()).date(),
+            send_date=today,
+            match_time__gte=current_time,
             package=payment.package,
         ).order_by('match_time'))
 
@@ -239,7 +243,7 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
             message = _build_predictions_message(
                 today_predictions,
                 payment.package.name,
-                timezone.localtime(timezone.now()).date()
+                today
             )
             _deliver_predictions(payment.user, payment.phone, payment.delivery_channel, message)
             logger.info("Sent today's predictions to new subscriber user=%s channel=%s", payment.user.id, payment.delivery_channel)
