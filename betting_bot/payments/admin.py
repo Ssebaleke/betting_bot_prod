@@ -75,7 +75,7 @@ class SMSBalanceAdmin(admin.ModelAdmin):
                 self.message_user(request, f"✅ Successfully added {credits} SMS credits. New balance: {balance.credits}.", messages.SUCCESS)
             except Exception as e:
                 self.message_user(request, f"❌ Error: {e}", messages.ERROR)
-            return redirect("../../1/change/")
+            return redirect("/admin/payments/smsbalance/1/change/")
 
         balance = SMSBalance.get()
         topups = SMSTopUp.objects.order_by("-created_at")[:15]
@@ -90,7 +90,7 @@ class SMSBalanceAdmin(admin.ModelAdmin):
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         extra_context = extra_context or {}
-        extra_context["topup_url"] = "topup/"
+        extra_context["topup_url"] = "/admin/payments/smsbalance/1/topup/"
         extra_context["show_topup_button"] = True
         return super().change_view(request, object_id, form_url, extra_context)
 
