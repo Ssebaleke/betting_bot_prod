@@ -28,13 +28,14 @@ class Command(BaseCommand):
         self.send_expiry_reminders(now)
 
     def _notify(self, user, message):
-        """Send notification via correct channel based on last payment."""
+        import re
         latest = Payment.objects.filter(
             user=user, status=Payment.STATUS_SUCCESS
         ).order_by("-created_at").first()
 
         if latest and latest.delivery_channel == Payment.CHANNEL_SMS:
-            plain = message.replace("*", "").replace("_", "")
+            plain = re.sub(r'[^\x00-\x7F]+', '', message.replace("*", "").replace("_", ""))
+            plain = re.sub(r'\n{3,}', '\n\n', plain).strip()
             send_sms(latest.phone, plain)
         else:
             try:

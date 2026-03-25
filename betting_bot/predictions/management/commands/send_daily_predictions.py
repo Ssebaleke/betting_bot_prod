@@ -68,6 +68,7 @@ class Command(BaseCommand):
         sent_count = 0
         failed_count = 0
         notified_users = set()
+        sent_packages = set()  # track packages where at least one subscriber was notified
 
         for subscription in active_subscriptions:
             try:
@@ -104,6 +105,7 @@ class Command(BaseCommand):
                 if success:
                     sent_count += 1
                     notified_users.add(subscription.user.id)
+                    sent_packages.add(subscription.package.name)
                     self.stdout.write(self.style.SUCCESS(
                         f"✓ Sent to {subscription.user.username} ({subscription.package.name})"
                     ))
@@ -116,17 +118,12 @@ class Command(BaseCommand):
 
         total_predictions = predictions.count()
 
-        # Only mark as sent if ALL subscribers were successfully notified
-        if sent_count > 0 and failed_count == 0:
-            predictions.update(is_sent=True)
-            self.stdout.write(self.style.SUCCESS("All subscribers notified — predictions marked as sent."))
-        elif sent_count > 0 and failed_count > 0:
-            self.stdout.write(self.style.WARNING(
-                f"{failed_count} subscriber(s) failed — predictions NOT marked as sent, will retry next run."
-            ))
-        else:
-            self.stdout.write(self.style.ERROR("All sends failed — predictions NOT marked as sent, will retry next run."))
-            return
+        # Mark predictions as sent per package — so late subscribers can receive them
+        if sent_packages:
+            predictions.filter(package__name__in=sent_packages).update(is_sent=True)
+            self.stdout.write(self.style.SUCCESS(f"Predictions marked as sent for packages: {', '.join(sent_packages)}"))
+        if failed_count > 0:
+            self.stdout.write(self.style.WARNING(f"{failed_count} subscriber(s) failed delivery."))
 
         self.stdout.write(self.style.SUCCESS(
             f"\n📊 Summary:\n"
@@ -139,7 +136,9 @@ class Command(BaseCommand):
     def _strip_markdown(self, text: str) -> str:
         text = re.sub(r'\*+', '', text)
         text = re.sub(r'_+', '', text)
-        return text
+        text = re.sub(r'[^\x00-\x7F]+', '', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
 
     def _build_message(self, predictions, package_name, date):
         total_odds = 1

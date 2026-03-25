@@ -268,11 +268,14 @@ def _deliver_predictions(user, phone: str, channel: str, message: str):
 
 
 def _strip_markdown(text: str) -> str:
-    """Remove Markdown formatting for plain SMS text."""
     import re
     text = re.sub(r'\*+', '', text)
     text = re.sub(r'_+', '', text)
-    return text
+    # remove emojis and non-GSM characters
+    text = re.sub(r'[^\x00-\x7F]+', '', text)
+    # clean up extra blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 def _build_predictions_message(predictions, package_name, date):
