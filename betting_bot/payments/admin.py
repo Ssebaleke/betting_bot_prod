@@ -29,7 +29,17 @@ class SMSConfigAdmin(admin.ModelAdmin):
 @admin.register(SMSBalance)
 class SMSBalanceAdmin(admin.ModelAdmin):
     list_display = ("credits", "price_per_sms", "updated_at")
-    readonly_fields = ("updated_at",)
+    readonly_fields = ("credits", "updated_at")
+    fieldsets = (
+        ("💰 SMS Pricing (Set by Super Admin)", {
+            "description": "Set the price per SMS credit charged to the owner. The owner pays this amount per SMS sent to subscribers.",
+            "fields": ("price_per_sms",),
+        }),
+        ("📊 Current Balance (Auto-managed)", {
+            "description": "Credits are added automatically when the owner tops up via Mobile Money. Do not edit manually.",
+            "fields": ("credits", "updated_at"),
+        }),
+    )
 
     def has_add_permission(self, request):
         return not SMSBalance.objects.exists()
