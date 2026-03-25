@@ -189,8 +189,12 @@ def yoo_ipn(request):
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
             # Check if this is an SMS top-up reference first
+            # Search both with and without hyphens since make_reference() stores hex
             from payments.models import SMSTopUp, SMSBalance
-            topup = SMSTopUp.objects.filter(payment_reference=reference).first()
+            topup = (
+                SMSTopUp.objects.filter(payment_reference=raw_ref).first()
+                or SMSTopUp.objects.filter(payment_reference=reference).first()
+            )
             if topup:
                 if topup.status == SMSTopUp.STATUS_SUCCESS:
                     return HttpResponse("OK")
@@ -244,7 +248,10 @@ def yoo_failure_ipn(request):
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
             from payments.models import SMSTopUp
-            topup = SMSTopUp.objects.filter(payment_reference=reference).first()
+            topup = (
+                SMSTopUp.objects.filter(payment_reference=raw_ref).first()
+                or SMSTopUp.objects.filter(payment_reference=reference).first()
+            )
             if topup:
                 if topup.status == SMSTopUp.STATUS_PENDING:
                     topup.status = SMSTopUp.STATUS_FAILED
