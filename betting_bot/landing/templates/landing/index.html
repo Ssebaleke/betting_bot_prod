@@ -143,11 +143,33 @@
       font-size: 9px; font-weight: 800; letter-spacing: 1px;
       padding: 3px 8px; border-radius: 0 0 6px 6px;
     }
-    .pkg-name { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-    .pkg-price { font-size: 28px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+    .pkg-name { font-size: 17px; font-weight: 700; margin-bottom: 12px; }
+    .pkg-price { font-size: 30px; font-weight: 800; color: var(--green); margin-bottom: 10px; }
     .pkg-price span { font-size: 13px; font-weight: 500; color: var(--muted); }
-    .pkg-duration { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-    .pkg-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .pkg-duration {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,214,0,.12);
+      border: 1px solid rgba(255,214,0,.3);
+      color: var(--gold);
+      font-size: 13px; font-weight: 700;
+      padding: 5px 12px; border-radius: 20px;
+      margin-bottom: 14px;
+    }
+    .pkg-divider { height: 1px; background: var(--border); margin-bottom: 12px; }
+    .pkg-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .pkg-features { list-style: none; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .pkg-features li { font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .pkg-features li::before { content: "✓"; color: var(--green); font-weight: 800; font-size: 13px; flex-shrink: 0; }
+    .pkg-cta {
+      display: block; width: 100%; margin-top: 16px;
+      background: linear-gradient(135deg, var(--green), var(--green-dim));
+      color: #000; font-size: 13px; font-weight: 800;
+      border: none; border-radius: 8px; padding: 10px;
+      cursor: pointer; text-align: center;
+      transition: opacity .2s;
+    }
+    .package-card.selected .pkg-cta { background: var(--gold); }
+    .pkg-cta:hover { opacity: .85; }
 
     /* PHONE FORM */
     .phone-card {
@@ -424,8 +446,15 @@
            onclick="selectPackage(${p.id}, '${esc(p.name)}', '${p.price}', ${p.duration_days})">
         <div class="pkg-name">${esc(p.name)}</div>
         <div class="pkg-price">UGX ${fmt(p.price)}<span> /sub</span></div>
-        <div class="pkg-duration">${p.duration_days} day${p.duration_days !== 1 ? 's' : ''}</div>
+        <div class="pkg-duration">⏱ ${p.duration_days} day${p.duration_days !== 1 ? 's' : ''} access</div>
+        <div class="pkg-divider"></div>
         <div class="pkg-desc">${esc(p.description) || 'Daily predictions delivered via SMS'}</div>
+        <ul class="pkg-features">
+          <li>Daily predictions every morning</li>
+          <li>Delivered via SMS to your phone</li>
+          <li>${p.duration_days} day${p.duration_days !== 1 ? 's' : ''} full access</li>
+        </ul>
+        <button class="pkg-cta">Select &rarr;</button>
       </div>
     `).join('');
   }
@@ -433,8 +462,8 @@
   function selectPackage(id, name, price, days) {
     selectedPackage = { id, name, price, days };
     document.getElementById("selectedSummary").innerHTML =
-      `<strong>${esc(name)}</strong><br>` +
-      `UGX ${fmt(price)} &nbsp;·&nbsp; ${days} day${days !== 1 ? 's' : ''}`;
+      `<strong>${esc(name)}</strong> &nbsp;<span style="color:var(--gold);font-weight:700;">${days} day${days !== 1 ? 's' : ''}</span><br>` +
+      `<span style="font-size:13px;color:var(--muted);">UGX ${fmt(price)} &nbsp;&middot;&nbsp; Predictions sent daily to your phone</span>`;
     document.getElementById("phoneInput").value = "";
     hideError();
     showPanel(2);
