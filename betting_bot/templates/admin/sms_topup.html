@@ -1,0 +1,75 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Manual SMS Top-Up{% endblock %}
+
+{% block content %}
+<h1>📱 Manual SMS Top-Up</h1>
+
+<div style="background:#1e2330; border:1px solid #2a3045; border-radius:8px; padding:20px; max-width:480px; margin-bottom:24px;">
+  <p style="color:#7a8099; font-size:13px; margin-bottom:16px;">
+    Current balance: <strong style="color:#00c853; font-size:18px;">{{ balance.credits }} credits</strong>
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-size:12px; font-weight:600; color:#7a8099; margin-bottom:6px; text-transform:uppercase;">
+        Credits to Add
+      </label>
+      <input type="number" name="credits" min="1" placeholder="e.g. 100"
+        style="width:100%; padding:10px 14px; background:#0d0f14; border:1px solid #2a3045; border-radius:6px; color:#e8eaf0; font-size:15px;"
+        required autofocus />
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="display:block; font-size:12px; font-weight:600; color:#7a8099; margin-bottom:6px; text-transform:uppercase;">
+        Note (optional)
+      </label>
+      <input type="text" name="note" placeholder="e.g. Bonus credits for March"
+        style="width:100%; padding:10px 14px; background:#0d0f14; border:1px solid #2a3045; border-radius:6px; color:#e8eaf0; font-size:14px;" />
+    </div>
+    <button type="submit"
+      style="background:#00c853; color:#000; font-weight:700; font-size:14px; padding:11px 24px; border:none; border-radius:6px; cursor:pointer;">
+      ✅ Add Credits
+    </button>
+    <a href="../" style="margin-left:14px; color:#7a8099; font-size:13px; text-decoration:none;">Cancel</a>
+  </form>
+</div>
+
+<h2 style="font-size:15px; margin-bottom:12px;">Recent Top-Ups</h2>
+<div style="overflow-x:auto;">
+  <table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr style="border-bottom:1px solid #2a3045; color:#7a8099; text-align:left;">
+        <th style="padding:8px 12px;">Credits Added</th>
+        <th style="padding:8px 12px;">Amount Paid</th>
+        <th style="padding:8px 12px;">Phone</th>
+        <th style="padding:8px 12px;">Status</th>
+        <th style="padding:8px 12px;">Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in topups %}
+      <tr style="border-bottom:1px solid rgba(42,48,69,.4);">
+        <td style="padding:8px 12px; color:#00c853; font-weight:700;">+{{ t.credits_added }}</td>
+        <td style="padding:8px 12px;">{% if t.amount_paid %}UGX {{ t.amount_paid }}{% else %}—{% endif %}</td>
+        <td style="padding:8px 12px; color:#7a8099;">{{ t.phone }}</td>
+        <td style="padding:8px 12px;">
+          {% if t.status == "SUCCESS" %}<span style="color:#00c853;">✅ Confirmed</span>
+          {% elif t.status == "PENDING" %}<span style="color:#ff9800;">⏳ Pending</span>
+          {% else %}<span style="color:#ff4444;">❌ Failed</span>{% endif %}
+        </td>
+        <td style="padding:8px 12px; color:#7a8099;">{{ t.created_at|date:"M d, Y H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" style="padding:16px 12px; color:#7a8099;">No top-ups yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  input:focus { outline: none; border-color: #00c853 !important; }
+</style>
+{% endblock %}

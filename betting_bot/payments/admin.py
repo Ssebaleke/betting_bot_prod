@@ -47,6 +47,53 @@ class SMSBalanceAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [path("topup/", self.admin_site.admin_view(self.topup_view), name="smsbalance_topup")]
+        return custom + urls
+
+    def topup_view(self, request):
+        from django.shortcuts import redirect
+        if request.method == "POST":
+            try:
+                credits = int(request.POST.get("credits", 0))
+                note = request.POST.get("note", "Manual top-up by super admin").strip()
+                if credits <= 0:
+                    raise ValueError("Credits must be a positive number.")
+                balance = SMSBalance.get()
+                balance.credits += credits
+                balance.save(update_fields=["credits", "updated_at"])
+                # Log it as an SMSTopUp record
+                import uuid
+                SMSTopUp.objects.create(
+                    phone="admin",
+                    amount_paid=0,
+                    credits_added=credits,
+                    payment_reference=f"manual-{uuid.uuid4().hex[:12]}",
+                    status=SMSTopUp.STATUS_SUCCESS,
+                )
+                self.message_user(request, f"✅ Successfully added {credits} SMS credits. New balance: {balance.credits}.", messages.SUCCESS)
+            except Exception as e:
+                self.message_user(request, f"❌ Error: {e}", messages.ERROR)
+            return redirect("../")
+
+        balance = SMSBalance.get()
+        topups = SMSTopUp.objects.order_by("-created_at")[:15]
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Manual SMS Top-Up",
+            "balance": balance,
+            "topups": topups,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/sms_topup.html", context)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["topup_url"] = "../topup/"
+        extra_context["show_topup_button"] = True
+        return super().change_view(request, object_id, form_url, extra_context)
+
 
 @admin.register(SMSTopUp)
 class SMSTopUpAdmin(admin.ModelAdmin):
