@@ -209,14 +209,17 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
-    # Send SMS confirmation for web payments
+    # Send SMS confirmation for web/SMS channel payments
     if payment.delivery_channel == Payment.CHANNEL_SMS:
         try:
             from .sms import send_sms
+            from django.utils import timezone
+            expiry = timezone.localtime(subscription.end_date).strftime("%B %d, %Y")
             send_sms(
                 payment.phone,
-                f"Payment confirmed! UGX {int(payment.amount):,} for {payment.package.name} package. "
-                f"Your predictions will be sent to this number daily. Bet Responsibly!"
+                f"Payment confirmed! UGX {int(payment.amount):,} received. "
+                f"You are now subscribed to {payment.package.name} package until {expiry}. "
+                f"You will receive daily predictions on this number. Bet Responsibly!"
             )
         except Exception as e:
             logger.error("SMS confirmation failed for ref=%s: %s", reference, e)

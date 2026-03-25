@@ -205,10 +205,13 @@ def yoo_ipn(request):
                 balance.save(update_fields=["credits", "updated_at"])
                 return HttpResponse("OK")
 
-            payment = Payment.objects.select_for_update().get(reference=reference)
+            payment = (
+                Payment.objects.select_for_update().filter(reference=raw_ref).first()
+                or Payment.objects.select_for_update().get(reference=reference)
+            )
             if payment.status == Payment.STATUS_SUCCESS:
                 return HttpResponse("OK")
-            confirm_payment(reference=reference, external_reference=network_ref)
+            confirm_payment(reference=payment.reference, external_reference=network_ref)
         try:
             payment.refresh_from_db()
             if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
@@ -258,7 +261,10 @@ def yoo_failure_ipn(request):
                     topup.save(update_fields=["status"])
                 return HttpResponse("OK")
 
-            payment = Payment.objects.select_for_update().get(reference=reference)
+            payment = (
+                Payment.objects.select_for_update().filter(reference=raw_ref).first()
+                or Payment.objects.select_for_update().get(reference=reference)
+            )
             if payment.status != Payment.STATUS_PENDING:
                 return HttpResponse("OK")
             payment.status = Payment.STATUS_FAILED
