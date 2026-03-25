@@ -254,6 +254,13 @@ def payments(request):
 
 
 @owner_required
+def sms_log(request):
+    from payments.models import SMSLog
+    logs = SMSLog.objects.order_by("-sent_at")[:200]
+    return render(request, "dashboard/sms_log.html", {"logs": logs})
+
+
+@owner_required
 def sms_credits(request):
     from payments.models import SMSBalance, SMSTopUp
     from django.db.models import Sum

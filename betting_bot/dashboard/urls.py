@@ -28,4 +28,5 @@ urlpatterns = [
     # SMS Credits
     path("sms-credits/", views.sms_credits, name="sms_credits"),
     path("sms-credits/pay/", views.sms_topup_pay, name="sms_topup_pay"),
+    path("sms-log/", views.sms_log, name="sms_log"),
 ]

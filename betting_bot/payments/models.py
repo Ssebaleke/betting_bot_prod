@@ -73,6 +73,24 @@ class SMSTopUp(models.Model):
         return f"+{self.credits_added} credits — {self.status}"
 
 
+class SMSLog(models.Model):
+    STATUS_SENT = "SENT"
+    STATUS_FAILED = "FAILED"
+    STATUS_CHOICES = [(STATUS_SENT, "Sent"), (STATUS_FAILED, "Failed")]
+
+    phone = models.CharField(max_length=20)
+    message = models.TextField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "SMS Log"
+        ordering = ["-sent_at"]
+
+    def __str__(self):
+        return f"{self.phone} — {self.status} — {self.sent_at.strftime('%Y-%m-%d %H:%M')}"
+
+
 class PaymentProvider(models.Model):
     name = models.CharField(max_length=50, unique=True)
     base_url = models.URLField()

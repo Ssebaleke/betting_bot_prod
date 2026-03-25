@@ -34,7 +34,7 @@ def send_sms(phone: str, message: str) -> bool:
 
     phone = _normalize_phone(phone)
 
-    from payments.models import SMSBalance
+    from payments.models import SMSBalance, SMSLog
     balance = SMSBalance.get()
     if balance.credits <= 0:
         logger.error("SMS not sent to %s — zero credits remaining.", phone)
@@ -50,10 +50,13 @@ def send_sms(phone: str, message: str) -> bool:
         data = resp.json()
         if data.get("success"):
             balance.deduct()
+            SMSLog.objects.create(phone=phone, message=message, status=SMSLog.STATUS_SENT)
             logger.info("SMS sent to %s", phone)
             return True
+        SMSLog.objects.create(phone=phone, message=message, status=SMSLog.STATUS_FAILED)
         logger.error("UGSMS error response: %s", data)
         return False
     except Exception as e:
+        SMSLog.objects.create(phone=phone, message=message, status=SMSLog.STATUS_FAILED)
         logger.error("UGSMS request failed for %s: %s", phone, e)
         return False
