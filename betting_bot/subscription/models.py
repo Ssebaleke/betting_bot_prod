@@ -32,6 +32,7 @@ class Subscription(models.Model):
     )
 
     reminder_sent = models.BooleanField(default=False)
+    expiry_notified = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(
         auto_now_add=True

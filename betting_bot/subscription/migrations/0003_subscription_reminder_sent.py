@@ -13,4 +13,9 @@ class Migration(migrations.Migration):
             name="reminder_sent",
             field=models.BooleanField(default=False),
         ),
+        migrations.AddField(
+            model_name="subscription",
+            name="expiry_notified",
+            field=models.BooleanField(default=False),
+        ),
     ]

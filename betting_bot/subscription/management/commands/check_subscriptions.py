@@ -43,7 +43,6 @@ class Command(BaseCommand):
                 logger.error("Telegram notify failed for user=%s: %s", user.id, e)
 
     def deactivate_expired(self, now):
-        """Deactivate expired subscriptions and notify users"""
         expired = Subscription.objects.filter(
             is_active=True,
             end_date__lte=now
@@ -55,7 +54,9 @@ class Command(BaseCommand):
             subscription.save(update_fields=['is_active'])
             count += 1
 
-            # Notify user
+            if subscription.expiry_notified:
+                continue
+
             try:
                 message = (
                     "⏰ *Subscription Expired*\n\n"
@@ -64,6 +65,8 @@ class Command(BaseCommand):
                     "Renew to keep receiving predictions. Use /start to subscribe."
                 )
                 self._notify(subscription.user, message)
+                subscription.expiry_notified = True
+                subscription.save(update_fields=['expiry_notified'])
                 self.stdout.write(self.style.WARNING(
                     f"⏰ Expired & notified: {subscription.user.username}"
                 ))
