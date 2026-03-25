@@ -256,8 +256,20 @@ def payments(request):
 @owner_required
 def sms_log(request):
     from payments.models import SMSLog
-    logs = SMSLog.objects.order_by("-sent_at")[:200]
-    return render(request, "dashboard/sms_log.html", {"logs": logs})
+    from django.core.paginator import Paginator
+
+    status_filter = request.GET.get("status", "")
+    qs = SMSLog.objects.all()
+    if status_filter in ("SENT", "FAILED"):
+        qs = qs.filter(status=status_filter)
+
+    paginator = Paginator(qs, 25)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(request, "dashboard/sms_log.html", {
+        "page_obj": page,
+        "status_filter": status_filter,
+        "total": qs.count(),
+    })
 
 
 @owner_required
