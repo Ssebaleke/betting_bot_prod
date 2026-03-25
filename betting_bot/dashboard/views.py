@@ -226,14 +226,31 @@ def prediction_delete(request, pk):
 
 @owner_required
 def subscribers(request):
-    subs = Subscription.objects.select_related("user", "package").order_by("-created_at")
-    return render(request, "dashboard/subscribers.html", {"subscribers": subs})
+    from django.core.paginator import Paginator
+    subs_qs = Subscription.objects.select_related("user", "package").order_by("-created_at")
+    paginator = Paginator(subs_qs, 20)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(request, "dashboard/subscribers.html", {"page_obj": page, "total": subs_qs.count()})
+
+
+@owner_required
+def subscriber_toggle(request, pk):
+    sub = get_object_or_404(Subscription, pk=pk)
+    if request.method == "POST":
+        sub.is_active = not sub.is_active
+        sub.save(update_fields=["is_active"])
+        action = "activated" if sub.is_active else "suspended"
+        messages.success(request, f"Subscription {action} for {sub.user.username}.")
+    return redirect("dashboard:subscribers")
 
 
 @owner_required
 def payments(request):
-    pmts = Payment.objects.select_related("user", "package").order_by("-created_at")
-    return render(request, "dashboard/payments.html", {"payments": pmts})
+    from django.core.paginator import Paginator
+    pmts_qs = Payment.objects.select_related("user", "package").order_by("-created_at")
+    paginator = Paginator(pmts_qs, 20)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(request, "dashboard/payments.html", {"page_obj": page, "total": pmts_qs.count()})
 
 
 @owner_required

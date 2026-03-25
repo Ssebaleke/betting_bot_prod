@@ -6,15 +6,24 @@
 {% block content %}
 <div class="page-header">
   <h1>💰 Payments</h1>
-  <div style="font-size:13px; color:var(--muted);">{{ payments|length }} total</div>
+  <div style="font-size:13px; color:var(--muted);">{{ total }} total</div>
 </div>
 
 <div class="card">
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Phone</th><th>Package</th><th>Amount</th><th>Channel</th><th>Status</th><th>Date</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Phone</th>
+          <th>Package</th>
+          <th>Amount</th>
+          <th>Channel</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
       <tbody>
-        {% for p in payments %}
+        {% for p in page_obj %}
         <tr>
           <td>{{ p.phone }}</td>
           <td>{{ p.package.name }}</td>
@@ -36,5 +45,31 @@
       </tbody>
     </table>
   </div>
+
+  <!-- PAGINATION -->
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:20px; flex-wrap:wrap; gap:10px;">
+    <div style="font-size:13px; color:var(--muted);">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} &nbsp;·&nbsp; {{ total }} total
+    </div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      {% if page_obj.has_previous %}
+        <a href="?page=1" class="btn btn-outline btn-sm">« First</a>
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">‹ Prev</a>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if num == page_obj.number %}
+          <span class="btn btn-green btn-sm">{{ num }}</span>
+        {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+          <a href="?page={{ num }}" class="btn btn-outline btn-sm">{{ num }}</a>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Next ›</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-outline btn-sm">Last »</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -22,6 +22,7 @@ urlpatterns = [
 
     # Subscribers & Payments
     path("subscribers/", views.subscribers, name="subscribers"),
+    path("subscribers/<int:pk>/toggle/", views.subscriber_toggle, name="subscriber_toggle"),
     path("payments/", views.payments, name="payments"),
 
     # SMS Credits
