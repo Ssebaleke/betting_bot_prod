@@ -5,7 +5,7 @@ Usage: python manage.py send_daily_predictions
 import re
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import datetime
+from datetime import date as date_type
 import logging
 
 from predictions.models import Prediction
@@ -31,7 +31,7 @@ class Command(BaseCommand):
         now = timezone.now()
         local_now = timezone.localtime(now)  # Convert to Uganda time (EAT)
         target_date = (
-            datetime.strptime(options['date'], '%Y-%m-%d').date()
+            date_type.fromisoformat(options['date'])
             if options['date']
             else local_now.date()
         )
@@ -94,7 +94,11 @@ class Command(BaseCommand):
                     try:
                         telegram_profile = subscription.user.telegramprofile
                         success = send_telegram_message(telegram_profile.telegram_id, message)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(
+                            "Telegram delivery skipped for user=%s (no TelegramProfile or send failed): %s",
+                            subscription.user.username, e
+                        )
                         success = False
 
                 if success:
@@ -110,11 +114,18 @@ class Command(BaseCommand):
                 failed_count += 1
                 logger.error(f"Error sending to {subscription.user.username}: {e}")
 
-        # Mark predictions as sent only if at least one was delivered
-        if sent_count > 0:
+        total_predictions = predictions.count()
+
+        # Only mark as sent if ALL subscribers were successfully notified
+        if sent_count > 0 and failed_count == 0:
             predictions.update(is_sent=True)
-        elif failed_count > 0:
-            self.stdout.write(self.style.ERROR("All sends failed - predictions NOT marked as sent, will retry next run."))
+            self.stdout.write(self.style.SUCCESS("All subscribers notified — predictions marked as sent."))
+        elif sent_count > 0 and failed_count > 0:
+            self.stdout.write(self.style.WARNING(
+                f"{failed_count} subscriber(s) failed — predictions NOT marked as sent, will retry next run."
+            ))
+        else:
+            self.stdout.write(self.style.ERROR("All sends failed — predictions NOT marked as sent, will retry next run."))
             return
 
         self.stdout.write(self.style.SUCCESS(
@@ -122,7 +133,7 @@ class Command(BaseCommand):
             f"✅ Sent: {sent_count}\n"
             f"❌ Failed: {failed_count}\n"
             f"📦 Packages: {len(predictions_by_package)}\n"
-            f"🎯 Total predictions: {predictions.count()}"
+            f"🎯 Total predictions: {total_predictions}"
         ))
 
     def _strip_markdown(self, text: str) -> str:
@@ -131,28 +142,25 @@ class Command(BaseCommand):
         return text
 
     def _build_message(self, predictions, package_name, date):
-        message = (
-            f"🔥 *DAILY PREDICTIONS* 🔥\n"
-            f"📅 {date.strftime('%A, %B %d, %Y')}\n"
-            f"📦 Package: {package_name}\n\n"
-        )
-
         total_odds = 1
+        lines = [
+            f"🔥 *DAILY PREDICTIONS* 🔥",
+            f"📅 {date.strftime('%A, %B %d, %Y')}",
+            f"📦 Package: {package_name}\n",
+        ]
         for i, pred in enumerate(predictions, 1):
             total_odds *= float(pred.odds)
-            message += (
+            lines.append(
                 f"*{i}. {pred.home_team} vs {pred.away_team}*\n"
                 f"⏰ {pred.match_time.strftime('%H:%M')}\n"
                 f"🎯 Prediction: *{pred.prediction}*\n"
-                f"💰 Odds: *{pred.odds}*\n\n"
+                f"💰 Odds: *{pred.odds}*"
             )
-
-        message += (
+        lines.append(
             f"━━━━━━━━━━━━━━━━━\n"
             f"🎰 *Total Combined Odds: {total_odds:.2f}*\n"
             f"━━━━━━━━━━━━━━━━━\n"
             f"💡 *Bet Responsibly*\n"
             f"Good luck! 🍀"
         )
-
-        return message
+        return "\n".join(lines)

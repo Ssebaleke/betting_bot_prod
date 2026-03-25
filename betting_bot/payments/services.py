@@ -130,26 +130,10 @@ def initiate_payment(user: User, package: Package, phone: str, delivery_channel:
 def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
     """
     Initiate a Yo! Payments USSD push collection.
-    Credentials read from env vars first, fall back to YooPaymentProvider DB record.
     """
-    from django.conf import settings
-
-    api_username = getattr(settings, "YOO_API_USERNAME", "").strip()
-    api_password = getattr(settings, "YOO_API_PASSWORD", "").strip()
-    notification_url = getattr(settings, "YOO_NOTIFICATION_URL", "").strip()
-    failure_url = getattr(settings, "YOO_FAILURE_URL", "").strip()
-
-    if not api_username or not api_password:
-        provider = YooPaymentProvider.objects.filter(is_active=True).first()
-        if not provider:
-            raise ValueError("No Yoo credentials found. Set YOO_API_USERNAME and YOO_API_PASSWORD in .env")
-        api_username = provider.api_username
-        api_password = provider.api_password
-        notification_url = notification_url or provider.notification_url
-        failure_url = failure_url or provider.failure_url
-
-    if not notification_url or not failure_url:
-        raise ValueError("Set YOO_NOTIFICATION_URL and YOO_FAILURE_URL in .env")
+    provider = YooPaymentProvider.objects.filter(is_active=True).first()
+    if not provider:
+        raise ValueError("No active Yo! Payment provider configured.")
 
     price_val = getattr(package, "price", None) or getattr(package, "amount", None)
     if price_val is None:
@@ -182,13 +166,13 @@ def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_chan
         status=Payment.STATUS_PENDING,
     )
 
-    client = YooClient(api_username=api_username, api_password=api_password)
+    client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
     result = client.collect(
         phone=phone_normalized,
         amount=int(amount),
         reference=reference,
-        notification_url=notification_url,
-        failure_url=failure_url,
+        notification_url=provider.notification_url,
+        failure_url=provider.failure_url,
     )
 
     logger.info("Yoo collect result ref=%s result=%s", reference, result)
@@ -220,11 +204,9 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
 
     logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
 
-    # Create subscription
-    subscription = Subscription.objects.create(
-        user=payment.user,
-        package=payment.package,
-    )
+    # Create subscription (deactivates any existing active subscription first)
+    from subscription.services import create_subscription
+    subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
     # Send SMS confirmation for web payments
@@ -287,25 +269,25 @@ def _strip_markdown(text: str) -> str:
 
 
 def _build_predictions_message(predictions, package_name, date):
-    message = (
-        f"🔥 *TODAY'S PREDICTIONS* 🔥\n"
-        f"📅 {date.strftime('%A, %B %d, %Y')}\n"
-        f"📦 Package: {package_name}\n\n"
-    )
+    lines = [
+        f"🔥 *TODAY'S PREDICTIONS* 🔥",
+        f"📅 {date.strftime('%A, %B %d, %Y')}",
+        f"📦 Package: {package_name}\n",
+    ]
     total_odds = 1
     for i, pred in enumerate(predictions, 1):
         total_odds *= float(pred.odds)
-        message += (
+        lines.append(
             f"*{i}. {pred.home_team} vs {pred.away_team}*\n"
             f"⏰ {pred.match_time.strftime('%H:%M')}\n"
             f"🎯 Prediction: *{pred.prediction}*\n"
-            f"💰 Odds: *{pred.odds}*\n\n"
+            f"💰 Odds: *{pred.odds}*"
         )
-    message += (
+    lines.append(
         f"━━━━━━━━━━━━━━━━━\n"
         f"🎰 *Total Combined Odds: {total_odds:.2f}*\n"
         f"━━━━━━━━━━━━━━━━━\n"
         f"💡 *Bet Responsibly*\n"
         f"Good luck! 🍀"
     )
-    return message
+    return "\n".join(lines)

@@ -1,9 +1,8 @@
 """
-UGSMS v2 client — API key read from UG_SMS_API_KEY env var.
+UGSMS v2 client — API key read from SMSConfig model set via Django admin.
 """
 import logging
 import requests
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +19,12 @@ def _normalize_phone(phone: str) -> str:
 
 
 def _get_api_key() -> str | None:
-    key = getattr(settings, "UG_SMS_API_KEY", "").strip()
-    if key:
-        return key
-    # fallback: check DB config
     from payments.models import SMSConfig
     config = SMSConfig.objects.filter(is_active=True).first()
-    if config:
-        return config.api_key
-    logger.error("No UGSMS API key found. Set UG_SMS_API_KEY in .env")
-    return None
+    if not config:
+        logger.error("No active SMSConfig found. Go to Admin > SMS Config and add your UGSMS API key.")
+        return None
+    return config.api_key
 
 
 def send_sms(phone: str, message: str) -> bool:
@@ -39,10 +34,9 @@ def send_sms(phone: str, message: str) -> bool:
 
     phone = _normalize_phone(phone)
 
-    # Check and deduct balance
     from payments.models import SMSBalance
     balance = SMSBalance.get()
-    if not balance.deduct():
+    if balance.credits <= 0:
         logger.error("SMS not sent to %s — zero credits remaining.", phone)
         return False
 
@@ -55,16 +49,11 @@ def send_sms(phone: str, message: str) -> bool:
         )
         data = resp.json()
         if data.get("success"):
+            balance.deduct()
             logger.info("SMS sent to %s", phone)
             return True
-        # Refund credit if API rejected
-        balance.credits += 1
-        balance.save(update_fields=["credits", "updated_at"])
         logger.error("UGSMS error response: %s", data)
         return False
     except Exception as e:
-        # Refund credit on network error
-        balance.credits += 1
-        balance.save(update_fields=["credits", "updated_at"])
         logger.error("UGSMS request failed for %s: %s", phone, e)
         return False

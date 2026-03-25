@@ -58,10 +58,10 @@ class Command(BaseCommand):
             # Notify user
             try:
                 message = (
-                    "Subscription Expired\n"
-                    f"Package: {subscription.package.name}\n"
-                    f"Expired: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
-                    "Renew to keep receiving predictions."
+                    "⏰ *Subscription Expired*\n\n"
+                    f"📦 Package: *{subscription.package.name}*\n"
+                    f"📅 Expired: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
+                    "Renew to keep receiving predictions. Use /start to subscribe."
                 )
                 self._notify(subscription.user, message)
                 self.stdout.write(self.style.WARNING(
@@ -85,10 +85,10 @@ class Command(BaseCommand):
         for subscription in expiring_soon:
             try:
                 message = (
-                    "Subscription Expiring Tomorrow\n"
-                    f"Package: {subscription.package.name}\n"
-                    f"Expires: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
-                    "Renew now to keep receiving daily predictions."
+                    "⚠️ *Subscription Expiring Tomorrow*\n\n"
+                    f"📦 Package: *{subscription.package.name}*\n"
+                    f"📅 Expires: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
+                    "Renew now to keep receiving daily predictions. Use /start to renew."
                 )
                 self._notify(subscription.user, message)
                 count += 1
