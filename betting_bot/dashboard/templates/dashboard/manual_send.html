@@ -1,0 +1,119 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Manual Send{% endblock %}
+{% block page_title %}Manual Send{% endblock %}
+{% block nav_predictions %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📤 Manual Send Predictions</h1>
+</div>
+
+<div class="card" style="max-width:700px;">
+  <form method="post" id="manualForm">
+    {% csrf_token %}
+
+    <!-- STEP 1: Package -->
+    <div class="form-group" style="margin-bottom:20px;">
+      <label>1. Select Package</label>
+      <select name="package" id="packageSelect" required onchange="loadData()">
+        <option value="">— Choose Package —</option>
+        {% for pkg in packages %}
+        <option value="{{ pkg.pk }}">{{ pkg.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- STEP 2: Predictions -->
+    <div class="form-group" style="margin-bottom:20px;">
+      <label>2. Select Predictions to Send</label>
+      <div id="predictionsBox" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;min-height:60px;">
+        <span style="color:var(--muted);font-size:13px;">Select a package first…</span>
+      </div>
+    </div>
+
+    <!-- STEP 3: Recipients -->
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>3. Send To</label>
+      <div style="display:flex;gap:16px;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;text-transform:none;letter-spacing:0;color:var(--text);cursor:pointer;">
+          <input type="radio" name="send_to" value="all" checked onchange="toggleRecipient(this)"> All active subscribers of this package
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;text-transform:none;letter-spacing:0;color:var(--text);cursor:pointer;">
+          <input type="radio" name="send_to" value="custom" onchange="toggleRecipient(this)"> Custom phone numbers
+        </label>
+      </div>
+
+      <!-- Subscriber list preview -->
+      <div id="subscriberPreview" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;color:var(--muted);">
+        Select a package to see subscribers…
+      </div>
+
+      <!-- Custom phones input -->
+      <div id="customPhoneBox" style="display:none;margin-top:12px;">
+        <label>Enter phone numbers (one per line, e.g. 0701234567 or 256701234567)</label>
+        <textarea name="custom_phones" rows="4" placeholder="0701234567&#10;0712345678&#10;256723456789"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-green" id="sendBtn">📤 Send Now</button>
+      <a href="{% url 'dashboard:predictions' %}" class="btn btn-outline">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  function loadData() {
+    const pkgId = document.getElementById("packageSelect").value;
+    if (!pkgId) return;
+
+    // Load predictions
+    fetch(`{% url 'dashboard:manual_send_predictions' %}?package_id=${pkgId}`)
+      .then(r => r.json())
+      .then(data => {
+        const box = document.getElementById("predictionsBox");
+        if (!data.predictions.length) {
+          box.innerHTML = '<span style="color:var(--muted);font-size:13px;">No predictions found for this package in the last 7 days.</span>';
+          return;
+        }
+        box.innerHTML = data.predictions.map(p => `
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+            <input type="checkbox" name="predictions" value="${p.id}" style="margin-top:3px;width:auto;" ${p.is_sent ? 'checked' : ''}>
+            <span style="font-size:13px;">
+              <strong>${p.home_team} vs ${p.away_team}</strong>
+              <span style="color:var(--muted);"> — ${p.prediction} @ ${p.odds} | ${p.send_date} ${p.match_time.slice(0,5)}</span>
+              ${p.is_sent ? '<span style="color:var(--green);font-size:11px;"> ✓ sent</span>' : '<span style="color:var(--warning);font-size:11px;"> ⏳ pending</span>'}
+            </span>
+          </label>
+        `).join('');
+      });
+
+    // Load subscribers
+    fetch(`{% url 'dashboard:manual_send_subscribers' %}?package_id=${pkgId}`)
+      .then(r => r.json())
+      .then(data => {
+        const box = document.getElementById("subscriberPreview");
+        if (!data.subscribers.length) {
+          box.innerHTML = '<span style="color:var(--muted);">No active subscribers for this package.</span>';
+          return;
+        }
+        box.innerHTML = `<strong style="color:var(--text);">${data.subscribers.length} active subscriber(s):</strong><br><br>` +
+          data.subscribers.map(s =>
+            `<span style="display:inline-block;background:rgba(0,200,83,.1);border:1px solid rgba(0,200,83,.2);color:var(--green);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px;">${s.phone || s.username}</span>`
+          ).join('');
+      });
+  }
+
+  function toggleRecipient(radio) {
+    document.getElementById("customPhoneBox").style.display = radio.value === "custom" ? "block" : "none";
+  }
+
+  document.getElementById("manualForm").addEventListener("submit", function(e) {
+    const checked = document.querySelectorAll("input[name='predictions']:checked");
+    if (!checked.length) {
+      e.preventDefault();
+      alert("Please select at least one prediction to send.");
+    }
+  });
+</script>
+{% endblock %}

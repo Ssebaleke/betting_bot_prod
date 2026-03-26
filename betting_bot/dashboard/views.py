@@ -302,6 +302,119 @@ def payments(request):
 
 
 @owner_required
+def manual_send(request):
+    import json
+    from predictions.models import Prediction
+    from payments.sms import send_sms
+    from payments.services import _build_predictions_message, _strip_markdown
+
+    packages_list = Package.objects.filter(is_active=True).order_by("name")
+
+    if request.method == "POST":
+        package_id = request.POST.get("package")
+        prediction_ids = request.POST.getlist("predictions")
+        send_to = request.POST.get("send_to")  # "all" or "custom"
+        custom_phones = request.POST.get("custom_phones", "").strip()
+
+        if not package_id or not prediction_ids:
+            messages.error(request, "Please select a package and at least one prediction.")
+            return redirect("dashboard:manual_send")
+
+        package = get_object_or_404(Package, pk=package_id)
+        preds = list(Prediction.objects.filter(
+            id__in=prediction_ids, package=package
+        ).order_by("match_time"))
+
+        if not preds:
+            messages.error(request, "No valid predictions found.")
+            return redirect("dashboard:manual_send")
+
+        # Build phone list
+        phones = []
+        if send_to == "all":
+            active_subs = Subscription.objects.filter(
+                package=package, is_active=True, end_date__gt=timezone.now()
+            ).select_related("user")
+            for sub in active_subs:
+                latest = Payment.objects.filter(
+                    user=sub.user, status=Payment.STATUS_SUCCESS
+                ).order_by("-created_at").first()
+                if latest and latest.phone:
+                    phones.append(latest.phone)
+        else:
+            for line in custom_phones.splitlines():
+                phone = line.strip().replace(" ", "")
+                if phone:
+                    if phone.startswith("0"):
+                        phone = "256" + phone[1:]
+                    elif not phone.startswith("256"):
+                        phone = "256" + phone
+                    phones.append(phone)
+
+        if not phones:
+            messages.error(request, "No phone numbers to send to.")
+            return redirect("dashboard:manual_send")
+
+        from datetime import date
+        send_date = preds[0].send_date if preds else date.today()
+        message = _strip_markdown(_build_predictions_message(preds, package.name, send_date))
+
+        sent = 0
+        failed = 0
+        for phone in set(phones):  # deduplicate
+            if send_sms(phone, message):
+                sent += 1
+            else:
+                failed += 1
+
+        if sent:
+            messages.success(request, f"✅ Sent to {sent} number(s). {f'❌ {failed} failed.' if failed else ''}")
+        else:
+            messages.error(request, f"❌ All {failed} sends failed. Check SMS credits.")
+
+        return redirect("dashboard:manual_send")
+
+    return render(request, "dashboard/manual_send.html", {"packages": packages_list})
+
+
+@owner_required
+def manual_send_subscribers(request):
+    """AJAX — return active subscribers for a package."""
+    package_id = request.GET.get("package_id")
+    if not package_id:
+        return JsonResponse({"subscribers": []})
+    subs = Subscription.objects.filter(
+        package_id=package_id, is_active=True, end_date__gt=timezone.now()
+    ).select_related("user")
+    data = []
+    for s in subs:
+        latest = Payment.objects.filter(
+            user=s.user, status=Payment.STATUS_SUCCESS
+        ).order_by("-created_at").first()
+        phone = latest.phone if latest else ""
+        data.append({"username": s.user.username, "phone": phone})
+    return JsonResponse({"subscribers": data})
+
+
+@owner_required
+def manual_send_predictions(request):
+    """AJAX — return predictions for a package."""
+    package_id = request.GET.get("package_id")
+    if not package_id:
+        return JsonResponse({"predictions": []})
+    from predictions.models import Prediction
+    from datetime import timedelta
+    from django.utils import timezone
+    since = timezone.localtime(timezone.now()).date() - timedelta(days=7)
+    preds = Prediction.objects.filter(
+        package_id=package_id, is_active=True, send_date__gte=since
+    ).order_by("-send_date", "match_time").values(
+        "id", "home_team", "away_team", "prediction", "odds", "send_date", "match_time", "is_sent"
+    )
+    return JsonResponse({"predictions": list(preds)})
+
+
+@owner_required
 def sms_log(request):
     from payments.models import SMSLog
     from django.core.paginator import Paginator

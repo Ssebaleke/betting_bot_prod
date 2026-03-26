@@ -32,4 +32,9 @@ urlpatterns = [
     path("sms-credits/", views.sms_credits, name="sms_credits"),
     path("sms-credits/pay/", views.sms_topup_pay, name="sms_topup_pay"),
     path("sms-log/", views.sms_log, name="sms_log"),
+
+    # Manual Send
+    path("manual-send/", views.manual_send, name="manual_send"),
+    path("manual-send/subscribers/", views.manual_send_subscribers, name="manual_send_subscribers"),
+    path("manual-send/predictions/", views.manual_send_predictions, name="manual_send_predictions"),
 ]

@@ -250,6 +250,9 @@
     <a href="{% url 'dashboard:predictions' %}" class="nav-item {% block nav_predictions %}{% endblock %}" onclick="closeSidebar()">
       <span class="icon">🎯</span> Predictions
     </a>
+    <a href="{% url 'dashboard:manual_send' %}" class="nav-item {% block nav_manual_send %}{% endblock %}" onclick="closeSidebar()">
+      <span class="icon">📤</span> Manual Send
+    </a>
 
     <div class="nav-section">Business</div>
     <a href="{% url 'dashboard:subscribers' %}" class="nav-item {% block nav_subscribers %}{% endblock %}" onclick="closeSidebar()">
