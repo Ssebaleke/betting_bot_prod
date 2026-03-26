@@ -231,13 +231,28 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
         today = local_now.date()
         current_time = local_now.time()
 
+        # Try today's unsent predictions first (matches not yet kicked off)
         today_predictions = list(Prediction.objects.filter(
             is_active=True,
             is_sent=True,
             send_date=today,
-            match_time__gte=current_time,
             package=payment.package,
         ).order_by('match_time'))
+
+        # Fallback: most recently sent predictions for this package
+        if not today_predictions:
+            latest_send_date = Prediction.objects.filter(
+                is_active=True,
+                is_sent=True,
+                package=payment.package,
+            ).order_by('-send_date').values_list('send_date', flat=True).first()
+            if latest_send_date:
+                today_predictions = list(Prediction.objects.filter(
+                    is_active=True,
+                    is_sent=True,
+                    send_date=latest_send_date,
+                    package=payment.package,
+                ).order_by('match_time'))
 
         if today_predictions:
             message = _build_predictions_message(
