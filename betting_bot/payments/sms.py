@@ -41,10 +41,12 @@ def send_sms(phone: str, message: str) -> bool:
         return False
 
     try:
+        from django.conf import settings
+        sender_id = getattr(settings, "UG_SMS_SENDER_ID", "BetTips")
         resp = requests.post(
             UGSMS_URL,
             headers={"X-API-Key": api_key, "Content-Type": "application/json"},
-            json={"numbers": phone, "message_body": message},
+            json={"numbers": phone, "message_body": message, "sender_id": sender_id},
             timeout=15,
         )
         data = resp.json()
