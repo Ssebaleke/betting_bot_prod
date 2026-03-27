@@ -255,12 +255,13 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
                 ).order_by('match_time'))
 
         if today_predictions:
-            message = _build_predictions_message(
-                today_predictions,
-                payment.package.name,
-                today
-            )
-            _deliver_predictions(payment.user, payment.phone, payment.delivery_channel, message)
+            if payment.delivery_channel == Payment.CHANNEL_SMS:
+                msg = _build_sms_predictions_message(today_predictions, payment.package.name, today)
+                from .sms import send_sms
+                send_sms(payment.phone, msg)
+            else:
+                message = _build_predictions_message(today_predictions, payment.package.name, today)
+                _deliver_predictions(payment.user, payment.phone, payment.delivery_channel, message)
             logger.info("Sent today's predictions to new subscriber user=%s channel=%s", payment.user.id, payment.delivery_channel)
     except Exception as e:
         logger.error("Failed to send predictions to new subscriber: %s", e)
@@ -269,10 +270,9 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
 
 
 def _deliver_predictions(user, phone: str, channel: str, message: str):
-    """Route prediction delivery to Telegram or SMS based on channel."""
     if channel == "SMS":
         from .sms import send_sms
-        send_sms(phone, _strip_markdown(message))
+        send_sms(phone, _build_sms_message_from_telegram(message))
     else:
         from bots.notifications import send_telegram_message
         try:
@@ -282,15 +282,33 @@ def _deliver_predictions(user, phone: str, channel: str, message: str):
             logger.error("Telegram delivery failed for user=%s: %s", user.id, e)
 
 
-def _strip_markdown(text: str) -> str:
+def _build_sms_message_from_telegram(text: str) -> str:
     import re
     text = re.sub(r'\*+', '', text)
     text = re.sub(r'_+', '', text)
-    # remove emojis and non-GSM characters
     text = re.sub(r'[^\x00-\x7F]+', '', text)
-    # clean up extra blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+def _build_sms_predictions_message(predictions, package_name, date):
+    total_odds = 1
+    lines = [
+        "DAILY PREDICTIONS",
+        date.strftime('%A, %B %d, %Y'),
+        f"Package: {package_name}",
+        "",
+    ]
+    for i, pred in enumerate(predictions, 1):
+        total_odds *= float(pred.odds)
+        lines.append(f"{i}. {pred.home_team} vs {pred.away_team}")
+        lines.append(f"Time: {pred.match_time.strftime('%H:%M')}")
+        lines.append(f"Tip: {pred.prediction}")
+        lines.append(f"Odds: {pred.odds}")
+        lines.append("")
+    lines.append(f"Total Odds: {total_odds:.2f}")
+    lines.append("Bet Responsibly. Good luck!")
+    return "\n".join(lines)
 
 
 def _build_predictions_message(predictions, package_name, date):

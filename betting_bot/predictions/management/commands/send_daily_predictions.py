@@ -90,7 +90,7 @@ class Command(BaseCommand):
 
                 if channel == Payment.CHANNEL_SMS:
                     phone = latest_payment.phone
-                    success = send_sms(phone, self._strip_markdown(message))
+                    success = send_sms(phone, self._build_sms_message(package_predictions, subscription.package.name, target_date))
                 else:
                     try:
                         telegram_profile = subscription.user.telegramprofile
@@ -139,6 +139,25 @@ class Command(BaseCommand):
         text = re.sub(r'[^\x00-\x7F]+', '', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
+
+    def _build_sms_message(self, predictions, package_name, date):
+        total_odds = 1
+        lines = [
+            f"DAILY PREDICTIONS",
+            f"{date.strftime('%A, %B %d, %Y')}",
+            f"Package: {package_name}",
+            "",
+        ]
+        for i, pred in enumerate(predictions, 1):
+            total_odds *= float(pred.odds)
+            lines.append(f"{i}. {pred.home_team} vs {pred.away_team}")
+            lines.append(f"Time: {pred.match_time.strftime('%H:%M')}")
+            lines.append(f"Tip: {pred.prediction}")
+            lines.append(f"Odds: {pred.odds}")
+            lines.append("")
+        lines.append(f"Total Odds: {total_odds:.2f}")
+        lines.append("Bet Responsibly. Good luck!")
+        return "\n".join(lines)
 
     def _build_message(self, predictions, package_name, date):
         total_odds = 1
