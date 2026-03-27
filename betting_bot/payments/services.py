@@ -293,21 +293,12 @@ def _build_sms_message_from_telegram(text: str) -> str:
 
 def _build_sms_predictions_message(predictions, package_name, date):
     total_odds = 1
-    lines = [
-        "DAILY PREDICTIONS",
-        date.strftime('%A, %B %d, %Y'),
-        f"Package: {package_name}",
-        "",
-    ]
-    for i, pred in enumerate(predictions, 1):
+    for pred in predictions:
         total_odds *= float(pred.odds)
-        lines.append(f"{i}. {pred.home_team} vs {pred.away_team}")
-        lines.append(f"Time: {pred.match_time.strftime('%H:%M')}")
-        lines.append(f"Tip: {pred.prediction}")
-        lines.append(f"Odds: {pred.odds}")
-        lines.append("")
-    lines.append(f"Total Odds: {total_odds:.2f}")
-    lines.append("Bet Responsibly. Good luck!")
+    lines = [f"TIPS {date.strftime('%d/%m/%Y')}:"]
+    for i, pred in enumerate(predictions, 1):
+        lines.append(f"{i}.{pred.home_team} v {pred.away_team} | {pred.prediction} @{pred.odds} ({pred.match_time.strftime('%H:%M')})")
+    lines.append(f"Odds:{total_odds:.2f} BetResponsibly")
     return "\n".join(lines)
 
 
