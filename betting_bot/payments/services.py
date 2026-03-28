@@ -291,6 +291,9 @@ def _build_sms_message_from_telegram(text: str) -> str:
     return text.strip()
 
 
+_strip_markdown = _build_sms_message_from_telegram
+
+
 def _build_sms_predictions_message(predictions, package_name, date):
     total_odds = 1
     for pred in predictions:
