@@ -301,7 +301,7 @@ def _build_sms_predictions_message(predictions, package_name, date):
     lines = [f"TIPS {date.strftime('%d/%m/%Y')}:"]
     for i, pred in enumerate(predictions, 1):
         lines.append(f"{i}.{pred.home_team} v {pred.away_team} | {pred.prediction} @{pred.odds} ({pred.match_time.strftime('%H:%M')})")
-    lines.append(f"Odds:{total_odds:.2f} BetResponsibly")
+    lines.append(f"Odds:{total_odds:.2f} Bet Responsibly")
     return "\n".join(lines)
 
 
