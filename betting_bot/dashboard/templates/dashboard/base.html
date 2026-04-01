@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}Dashboard{% endblock %} – BetTips Pro</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -91,11 +91,11 @@
     .card-sm { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
     /* STAT GRID */
-    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .stat-card { border-radius: 14px; padding: 20px; color: #fff; border: none; position: relative; overflow: hidden; }
-    .stat-card::after { content: ''; position: absolute; top: -20px; right: -20px; width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,.08); }
-    .stat-card .stat-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; opacity: .85; }
-    .stat-card .stat-value { font-size: 26px; font-weight: 800; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { border-radius: 12px; padding: 16px; color: #fff; border: none; position: relative; overflow: hidden; }
+    .stat-card::after { content: ''; position: absolute; top: -20px; right: -20px; width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,.08); }
+    .stat-card .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; opacity: .85; }
+    .stat-card .stat-value { font-size: 22px; font-weight: 800; }
     .stat-card .stat-sub { font-size: 11px; margin-top: 4px; opacity: .7; }
     .stat-card.green { background: linear-gradient(135deg, #00c853, #00695c); }
     .stat-card.gold { background: linear-gradient(135deg, #f9a825, #e65100); }
@@ -195,61 +195,64 @@
       .sidebar.open { transform: translateX(0); }
       .main { margin-left: 0; }
       .hamburger { display: flex; }
-      .topbar { padding: 12px 16px; }
+      .topbar { padding: 10px 14px; }
+      .topbar-title { font-size: 15px; }
       .topbar-user { display: none; }
-      .content { padding: 12px; }
+      .content { padding: 10px; }
 
-      /* stat cards: 2 per row on mobile */
-      .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-      .stat-card { padding: 12px 10px; }
-      .stat-card .stat-value { font-size: 16px; }
-      .stat-card .stat-label { font-size: 9px; letter-spacing: 0; }
+      /* stat cards: 2 per row */
+      .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+      .stat-card { padding: 10px 10px; border-radius: 10px; }
+      .stat-card .stat-value { font-size: 15px; }
+      .stat-card .stat-label { font-size: 9px; letter-spacing: 0; margin-bottom: 4px; }
       .stat-card .stat-sub { font-size: 9px; }
-      .stat-card::after { width: 40px; height: 40px; }
+      .stat-card::after { width: 36px; height: 36px; }
 
-      /* charts stack vertically */
-      .charts-row { grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
+      /* charts stack */
+      .charts-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
 
-      /* responsive grid */
-      .responsive-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+      .responsive-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
 
       /* forms */
-      .form-grid { grid-template-columns: 1fr; gap: 12px; }
-      .form-actions { flex-direction: column; }
+      .form-grid { grid-template-columns: 1fr; gap: 10px; }
+      .form-actions { flex-direction: column; gap: 8px; }
       .form-actions .btn { width: 100%; justify-content: center; }
 
       /* page header */
-      .page-header { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
-      .page-header h1 { font-size: 17px; }
+      .page-header { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+      .page-header h1 { font-size: 16px; }
       .page-header .btn { width: 100%; justify-content: center; }
 
       /* cards */
-      .card { padding: 14px; border-radius: 10px; }
+      .card { padding: 12px; border-radius: 10px; }
 
       /* buttons */
-      .btn { font-size: 12px; padding: 8px 14px; }
-      .btn-sm { font-size: 11px; padding: 5px 10px; }
+      .btn { font-size: 12px; padding: 7px 12px; }
+      .btn-sm { font-size: 11px; padding: 4px 9px; }
 
-      /* tables — scroll horizontally, no min-width forcing zoom */
+      /* tables */
       .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
       table { font-size: 11px; width: 100%; min-width: 0; }
-      th { font-size: 10px; padding: 7px 8px; white-space: nowrap; }
-      td { padding: 8px; white-space: nowrap; font-size: 11px; }
+      th { font-size: 9px; padding: 6px 7px; white-space: nowrap; }
+      td { padding: 7px; white-space: nowrap; font-size: 11px; }
 
-      /* inputs */
-      input, select, textarea { font-size: 16px; } /* prevents iOS zoom on focus */
+      /* prevent iOS zoom on input focus */
+      input, select, textarea { font-size: 16px; }
 
       /* wallet card */
       .wallet-card-inner { flex-direction: column !important; align-items: flex-start !important; }
-      .wallet-card-inner .wallet-btns { width: 100%; }
+      .wallet-card-inner .wallet-btns { width: 100%; display: flex; gap: 8px; }
       .wallet-card-inner .wallet-btns a,
-      .wallet-card-inner .wallet-btns button { width: 100%; justify-content: center; text-align: center; }
+      .wallet-card-inner .wallet-btns button { flex: 1; justify-content: center; text-align: center; }
     }
 
-    @media (max-width: 380px) {
-      .stat-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-      .stat-card .stat-value { font-size: 14px; }
+    @media (max-width: 400px) {
+      .stat-grid { gap: 6px; }
+      .stat-card { padding: 8px; }
+      .stat-card .stat-value { font-size: 13px; }
+      .stat-card .stat-label { font-size: 8px; }
       .content { padding: 8px; }
+      .card { padding: 10px; }
     }
   </style>
 </head>
