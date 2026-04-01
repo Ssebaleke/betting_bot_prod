@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from packages.models import Package
+from decimal import Decimal
 
 
 class SMSConfig(models.Model):
@@ -157,9 +158,11 @@ class Payment(models.Model):
 
     PROVIDER_MAKYPAY = "MAKYPAY"
     PROVIDER_YOO = "YOO"
+    PROVIDER_LIVE = "LIVE"
     PROVIDER_TYPE_CHOICES = (
         (PROVIDER_MAKYPAY, "MakyPay"),
         (PROVIDER_YOO, "Yo! Payments"),
+        (PROVIDER_LIVE, "LivePay"),
     )
 
     CHANNEL_TELEGRAM = "TELEGRAM"
@@ -196,3 +199,111 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.reference} ({self.status})"
+
+
+class LivePayProvider(models.Model):
+    name = models.CharField(max_length=50, default="LivePay")
+    public_key = models.CharField(max_length=255)
+    secret_key = models.CharField(max_length=255)
+    transaction_pin = models.CharField(max_length=20, blank=True, help_text="PIN for Send Money (withdrawals)")
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "LivePay Provider"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            LivePayProvider.objects.exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({'ACTIVE' if self.is_active else 'inactive'})"
+
+
+class RevenueConfig(models.Model):
+    """Singleton — one row. Controls platform revenue percentage per transaction."""
+    percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        help_text="Platform revenue % deducted from each successful payment (e.g. 10 = 10%)"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Revenue Config"
+
+    def __str__(self):
+        return f"{self.percentage}% per transaction"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+
+class OwnerWallet(models.Model):
+    """Singleton — tracks accumulated platform revenue."""
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Owner Wallet"
+
+    def __str__(self):
+        return f"Owner Wallet — UGX {self.balance}"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def credit(cls, amount):
+        from django.db import transaction as db_tx
+        with db_tx.atomic():
+            wallet = cls.objects.select_for_update().get_or_create(pk=1)[0]
+            wallet.balance += Decimal(str(amount))
+            wallet.total_earned += Decimal(str(amount))
+            wallet.save(update_fields=["balance", "total_earned", "updated_at"])
+
+
+class WithdrawalRequest(models.Model):
+    STATUS_PENDING = "PENDING"
+    STATUS_PAID = "PAID"
+    STATUS_FAILED = "FAILED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PAID, "Paid"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    PAYOUT_MTN = "MTN"
+    PAYOUT_AIRTEL = "AIRTEL"
+    PAYOUT_CHOICES = [
+        (PAYOUT_MTN, "MTN Mobile Money"),
+        (PAYOUT_AIRTEL, "Airtel Money"),
+    ]
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payout_phone = models.CharField(max_length=20)
+    payout_network = models.CharField(max_length=10, choices=PAYOUT_CHOICES, default=PAYOUT_MTN)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    failure_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Withdrawal Request"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"UGX {self.amount} → {self.payout_phone} ({self.status})"

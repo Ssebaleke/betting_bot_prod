@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
-from .models import Prediction
+from .models import Prediction, PredictionDelivery
 
 
 @admin.register(Prediction)
@@ -39,3 +39,13 @@ class PredictionAdmin(admin.ModelAdmin):
         updated = queryset.update(is_sent=False)
         self.message_user(request, f"{updated} prediction(s) marked as unsent — scheduler will resend them.", messages.SUCCESS)
     mark_unsent.short_description = "Mark selected as UNSENT (resend on next scheduler run)"
+
+
+@admin.register(PredictionDelivery)
+class PredictionDeliveryAdmin(admin.ModelAdmin):
+    list_display = ("user", "package", "send_date", "delivered_at")
+    list_filter = ("package", "send_date")
+    search_fields = ("user__username",)
+    ordering = ("-delivered_at",)
+    date_hierarchy = "send_date"
+    readonly_fields = ("user", "package", "send_date", "delivered_at")

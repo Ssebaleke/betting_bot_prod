@@ -29,7 +29,7 @@ def restore_reference(ref: str) -> str:
 class YooClient:
     PRIMARY = "https://paymentsapi1.yo.co.ug/ybs/task.php"
     BACKUP = "https://paymentsapi2.yo.co.ug/ybs/task.php"
-    TIMEOUT = 60
+    TIMEOUT = 30
 
     SUCCESS_STATUSES = {"SUCCEEDED", "SUCCESS", "SUCCESSFUL", "COMPLETED", "APPROVED"}
     FAILED_STATUSES = {"FAILED", "CANCELLED", "REJECTED", "EXPIRED"}
@@ -47,15 +47,23 @@ class YooClient:
         return root
 
     def _post(self, xml_root: ET.Element) -> ET.Element:
+        import concurrent.futures
         body = '<?xml version="1.0" encoding="UTF-8"?>' + ET.tostring(xml_root, encoding="unicode")
         headers = {"Content-Type": "text/xml"}
-        for url in (self.PRIMARY, self.BACKUP):
-            try:
-                r = requests.post(url, data=body.encode("utf-8"), headers=headers, timeout=self.TIMEOUT)
-                r.raise_for_status()
-                return ET.fromstring(r.text)
-            except requests.RequestException:
-                continue
+        encoded = body.encode("utf-8")
+
+        def try_url(url):
+            r = requests.post(url, data=encoded, headers=headers, timeout=self.TIMEOUT)
+            r.raise_for_status()
+            return ET.fromstring(r.text)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {executor.submit(try_url, url): url for url in (self.PRIMARY, self.BACKUP)}
+            for future in concurrent.futures.as_completed(futures, timeout=self.TIMEOUT + 5):
+                try:
+                    return future.result()
+                except Exception:
+                    continue
         raise ValueError("Yo! API unreachable on both endpoints")
 
     def _parse(self, tree: ET.Element) -> dict:

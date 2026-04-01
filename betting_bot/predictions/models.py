@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from packages.models import Package
+from django.contrib.auth.models import User
 
 
 class Prediction(models.Model):
@@ -43,3 +44,17 @@ class Prediction(models.Model):
 
     def __str__(self):
         return f"{self.home_team} vs {self.away_team} | {self.prediction} | Send: {self.send_date}"
+
+
+class PredictionDelivery(models.Model):
+    """Tracks per-user delivery so we never double-send or miss anyone."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    send_date = models.DateField()
+    package = models.ForeignKey(Package, on_delete=models.CASCADE)
+    delivered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'send_date', 'package')
+
+    def __str__(self):
+        return f"{self.user.username} | {self.package.name} | {self.send_date}"

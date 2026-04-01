@@ -1,0 +1,144 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Owner Wallet{% endblock %}
+{% block content %}
+<div class="container-fluid px-4">
+    <h4 class="fw-bold mb-4">Owner Wallet</h4>
+
+    <!-- Balance Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm" style="background:linear-gradient(135deg,#2dc653,#1a7a32);color:#fff;border-radius:14px;">
+                <div class="card-body p-4">
+                    <div class="small opacity-75">Available Balance</div>
+                    <div class="fs-3 fw-bold">UGX {{ wallet.balance|floatformat:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm" style="background:linear-gradient(135deg,#4361ee,#3a0ca3);color:#fff;border-radius:14px;">
+                <div class="card-body p-4">
+                    <div class="small opacity-75">Total Earned</div>
+                    <div class="fs-3 fw-bold">UGX {{ wallet.total_earned|floatformat:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm" style="background:linear-gradient(135deg,#f77f00,#a04800);color:#fff;border-radius:14px;">
+                <div class="card-body p-4">
+                    <div class="small opacity-75">Revenue %</div>
+                    <div class="fs-3 fw-bold">{{ config.percentage }}% per transaction</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdraw Form -->
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:14px;">
+        <div class="card-body p-4">
+            <h6 class="fw-bold mb-3">Withdraw Funds</h6>
+            <div id="withdrawAlert" class="alert d-none"></div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Amount (UGX)</label>
+                    <input type="number" id="wAmount" class="form-control" placeholder="Min 10,000" min="10000">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" id="wPhone" class="form-control" placeholder="256XXXXXXXXX">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Network</label>
+                    <select id="wNetwork" class="form-select">
+                        <option value="MTN">MTN Mobile Money</option>
+                        <option value="AIRTEL">Airtel Money</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-success w-100" id="wBtn" onclick="doWithdraw()">
+                        <span id="wBtnText">Withdraw</span>
+                        <span id="wBtnSpinner" class="d-none spinner-border spinner-border-sm ms-1"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdrawal History -->
+    <div class="card border-0 shadow-sm" style="border-radius:14px;">
+        <div class="card-body p-0">
+            <div class="p-3 border-bottom fw-bold">Withdrawal History</div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Amount</th>
+                            <th>Phone</th>
+                            <th>Network</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for w in withdrawals %}
+                        <tr>
+                            <td class="fw-semibold">UGX {{ w.amount|floatformat:0 }}</td>
+                            <td>{{ w.payout_phone }}</td>
+                            <td>{{ w.payout_network }}</td>
+                            <td>
+                                {% if w.status == 'PAID' %}<span class="badge bg-success">Paid</span>
+                                {% elif w.status == 'PENDING' %}<span class="badge bg-warning text-dark">Pending</span>
+                                {% else %}<span class="badge bg-danger">Failed</span>{% endif %}
+                            </td>
+                            <td>{{ w.created_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4 text-muted">No withdrawals yet</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function doWithdraw() {
+    const amount = document.getElementById('wAmount').value;
+    const phone = document.getElementById('wPhone').value.trim();
+    const network = document.getElementById('wNetwork').value;
+    const alertEl = document.getElementById('withdrawAlert');
+    alertEl.className = 'alert d-none';
+
+    if (!amount || !phone) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Amount and phone are required.';
+        return;
+    }
+
+    document.getElementById('wBtnText').textContent = 'Processing...';
+    document.getElementById('wBtnSpinner').classList.remove('d-none');
+    document.getElementById('wBtn').disabled = true;
+
+    fetch("{% url 'dashboard:owner_withdraw' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({amount, phone, network})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alertEl.className = 'alert ' + (data.success ? 'alert-success' : 'alert-danger');
+        alertEl.textContent = data.success ? data.message : data.error;
+        if (data.success) setTimeout(() => location.reload(), 2000);
+    })
+    .catch(() => {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Network error. Try again.';
+    })
+    .finally(() => {
+        document.getElementById('wBtnText').textContent = 'Withdraw';
+        document.getElementById('wBtnSpinner').classList.add('d-none');
+        document.getElementById('wBtn').disabled = false;
+    });
+}
+</script>
+{% endblock %}

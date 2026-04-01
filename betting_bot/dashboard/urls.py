@@ -37,4 +37,8 @@ urlpatterns = [
     path("manual-send/", views.manual_send, name="manual_send"),
     path("manual-send/subscribers/", views.manual_send_subscribers, name="manual_send_subscribers"),
     path("manual-send/predictions/", views.manual_send_predictions, name="manual_send_predictions"),
+
+    # Owner Wallet
+    path("wallet/", views.owner_wallet, name="owner_wallet"),
+    path("wallet/withdraw/", views.owner_withdraw, name="owner_withdraw"),
 ]

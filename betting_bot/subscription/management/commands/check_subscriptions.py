@@ -77,34 +77,5 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Deactivated {count} expired subscriptions"))
 
     def send_expiry_reminders(self, now):
-        """Send reminder to users whose subscription expires in 2 hours — only once."""
-        reminder_window_start = now + timedelta(hours=2)
-        reminder_window_end = now + timedelta(hours=3)
-
-        expiring_soon = Subscription.objects.filter(
-            is_active=True,
-            reminder_sent=False,
-            end_date__gte=reminder_window_start,
-            end_date__lt=reminder_window_end,
-        ).select_related('user', 'package')
-
-        count = 0
-        for subscription in expiring_soon:
-            try:
-                message = (
-                    "Subscription Expiring Soon\n\n"
-                    f"Package: {subscription.package.name}\n"
-                    f"Expires: {subscription.end_date.strftime('%B %d, %Y %H:%M')}\n\n"
-                    "Renew now to keep receiving daily predictions."
-                )
-                self._notify(subscription.user, message)
-                subscription.reminder_sent = True
-                subscription.save(update_fields=['reminder_sent'])
-                count += 1
-                self.stdout.write(self.style.WARNING(
-                    f"⚠️ Reminder sent: {subscription.user.username} (expires tomorrow)"
-                ))
-            except Exception as e:
-                logger.error(f"Failed to send reminder to {subscription.user.username}: {e}")
-
-        self.stdout.write(self.style.SUCCESS(f"Sent {count} expiry reminders"))
+        self.stdout.write("Expiry reminders disabled.")
+        return

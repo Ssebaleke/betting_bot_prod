@@ -13,6 +13,10 @@ from .models import (
     PaymentProviderConfig,
     YooPaymentProvider,
     Payment,
+    LivePayProvider,
+    RevenueConfig,
+    OwnerWallet,
+    WithdrawalRequest,
 )
 
 
@@ -192,6 +196,18 @@ class PaymentAdmin(admin.ModelAdmin):
             .order_by("day")
         )
 
+        # Commission earnings from owner wallet
+        from payments.models import OwnerWallet, RevenueConfig, SMSTopUp
+        wallet = OwnerWallet.get()
+        config = RevenueConfig.get()
+        commission_today = SMSTopUp.objects.none()  # placeholder
+
+        # SMS earnings
+        sms_qs = SMSTopUp.objects.filter(status=SMSTopUp.STATUS_SUCCESS)
+        sms_total = sms_qs.aggregate(t=Sum("amount_paid"))["t"] or 0
+        sms_today = sms_qs.filter(created_at__date=today).aggregate(t=Sum("amount_paid"))["t"] or 0
+        sms_month = sms_qs.filter(created_at__date__gte=this_month_start).aggregate(t=Sum("amount_paid"))["t"] or 0
+
         context = {
             **self.admin_site.each_context(request),
             "title": "Revenue Dashboard",
@@ -206,6 +222,14 @@ class PaymentAdmin(admin.ModelAdmin):
             "new_this_month": new_this_month,
             "per_package": per_package,
             "daily": daily,
+            # commission
+            "commission_balance": wallet.balance,
+            "commission_total_earned": wallet.total_earned,
+            "commission_percentage": config.percentage,
+            # sms
+            "sms_total": sms_total,
+            "sms_today": sms_today,
+            "sms_month": sms_month,
         }
         return render(request, "admin/payments_dashboard.html", context)
 
@@ -252,3 +276,52 @@ class PaymentAdmin(admin.ModelAdmin):
             obj.get_status_display()
         )
     colored_status.short_description = 'Status'
+
+
+@admin.register(LivePayProvider)
+class LivePayProviderAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "created_at")
+    list_editable = ("is_active",)
+    fieldsets = (
+        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin")}),
+        ("Status", {"fields": ("is_active",)}),
+    )
+
+
+@admin.register(RevenueConfig)
+class RevenueConfigAdmin(admin.ModelAdmin):
+    list_display = ("percentage", "updated_at")
+    fieldsets = (
+        ("Revenue Settings", {
+            "description": "Set the platform revenue percentage deducted from each successful payment.",
+            "fields": ("percentage",),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return not RevenueConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OwnerWallet)
+class OwnerWalletAdmin(admin.ModelAdmin):
+    list_display = ("balance", "total_earned", "updated_at")
+    readonly_fields = ("balance", "total_earned", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(WithdrawalRequest)
+class WithdrawalRequestAdmin(admin.ModelAdmin):
+    list_display = ("amount", "payout_phone", "payout_network", "status", "created_at")
+    list_filter = ("status", "payout_network")
+    readonly_fields = ("amount", "payout_phone", "payout_network", "status", "failure_reason", "created_at")
+
+    def has_add_permission(self, request):
+        return False

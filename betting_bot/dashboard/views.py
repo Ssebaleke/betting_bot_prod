@@ -513,3 +513,96 @@ def sms_topup_pay(request):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": True, "reference": reference, "credits": credits_to_add})
+
+
+@owner_required
+def owner_wallet(request):
+    from payments.models import OwnerWallet, WithdrawalRequest, RevenueConfig
+    wallet = OwnerWallet.get()
+    config = RevenueConfig.get()
+    withdrawals = WithdrawalRequest.objects.order_by("-created_at")[:20]
+    return render(request, "dashboard/owner_wallet.html", {
+        "wallet": wallet,
+        "config": config,
+        "withdrawals": withdrawals,
+    })
+
+
+@owner_required
+def owner_withdraw(request):
+    import json
+    from decimal import Decimal
+    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider
+    from payments.live_client import LivePayClient
+
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST only"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+
+    amount = data.get("amount")
+    phone = (data.get("phone") or "").strip()
+    network = (data.get("network") or "MTN").upper()
+
+    if not amount or not phone:
+        return JsonResponse({"success": False, "error": "Amount and phone are required"}, status=400)
+
+    amount = Decimal(str(amount))
+
+    if amount < 10000:
+        return JsonResponse({"success": False, "error": "Minimum withdrawal is UGX 10,000"}, status=400)
+
+    wallet = OwnerWallet.get()
+    if amount > wallet.balance:
+        return JsonResponse({"success": False, "error": "Insufficient wallet balance"}, status=400)
+
+    provider = LivePayProvider.objects.filter(is_active=True).first()
+    if not provider:
+        return JsonResponse({"success": False, "error": "No active LivePay provider configured"}, status=400)
+
+    if not provider.transaction_pin:
+        return JsonResponse({"success": False, "error": "LivePay transaction PIN not configured"}, status=400)
+
+    import uuid as _uuid
+    ref = str(_uuid.uuid4()).replace("-", "")
+
+    client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
+    result = client.send(
+        amount=int(amount),
+        phone=phone,
+        network=network,
+        pin=provider.transaction_pin,
+        reference=ref,
+    )
+
+    if result.get("status") != "success":
+        error_msg = result.get("message") or "Disbursement failed"
+        WithdrawalRequest.objects.create(
+            amount=amount,
+            payout_phone=phone,
+            payout_network=network,
+            status=WithdrawalRequest.STATUS_FAILED,
+            failure_reason=error_msg,
+        )
+        return JsonResponse({"success": False, "error": error_msg}, status=400)
+
+    # Deduct wallet and record withdrawal
+    from django.db import transaction as db_tx
+    with db_tx.atomic():
+        locked = OwnerWallet.objects.select_for_update().get(pk=1)
+        if amount > locked.balance:
+            return JsonResponse({"success": False, "error": "Insufficient balance"}, status=400)
+        locked.balance -= amount
+        locked.save(update_fields=["balance", "updated_at"])
+
+        WithdrawalRequest.objects.create(
+            amount=amount,
+            payout_phone=phone,
+            payout_network=network,
+            status=WithdrawalRequest.STATUS_PAID,
+        )
+
+    return JsonResponse({"success": True, "message": f"UGX {int(amount):,} sent to {phone}"})

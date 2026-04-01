@@ -9,9 +9,10 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 
 from packages.models import Package
-from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider
+from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider, LivePayProvider, RevenueConfig, OwnerWallet
 from .makypay import MakyPayClient, normalize_ug_phone
 from .yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
+from .live_client import LivePayClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ def initiate_web_payment(phone: str, package_id: int) -> Payment:
     """Entry point for landing page payments - auto-creates user, forces SMS channel."""
     user = get_or_create_phone_user(phone)
     package = Package.objects.get(id=package_id, is_active=True)
+
+    live = LivePayProvider.objects.filter(is_active=True).first()
+    if live:
+        return initiate_live_payment(user=user, package=package, phone=phone, delivery_channel="SMS")
 
     yoo = YooPaymentProvider.objects.filter(is_active=True).first()
     if yoo:
@@ -127,6 +132,70 @@ def initiate_payment(user: User, package: Package, phone: str, delivery_channel:
 
 
 @transaction.atomic
+def initiate_live_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
+    """
+    Initiate a LivePay USSD push collection.
+    """
+    provider = LivePayProvider.objects.filter(is_active=True).first()
+    if not provider:
+        raise ValueError("No active LivePay provider configured.")
+
+    price_val = getattr(package, "price", None) or getattr(package, "amount", None)
+    if price_val is None:
+        raise ValueError("Package has no price field.")
+
+    amount = Decimal(str(price_val))
+    phone_normalized = LivePayClient._normalize_phone(phone)
+    network = LivePayClient.detect_network(phone)
+
+    # Prevent duplicate pending within 2 minutes
+    recent = Payment.objects.filter(
+        user=user,
+        status=Payment.STATUS_PENDING,
+        provider_type=Payment.PROVIDER_LIVE,
+        created_at__gte=timezone.now() - timezone.timedelta(minutes=2),
+    ).order_by("-created_at").first()
+    if recent:
+        return recent
+
+    reference = str(uuid.uuid4()).replace("-", "")
+
+    payment = Payment.objects.create(
+        user=user,
+        package=package,
+        provider=None,
+        provider_type=Payment.PROVIDER_LIVE,
+        phone=phone_normalized,
+        amount=amount,
+        reference=reference,
+        delivery_channel=delivery_channel,
+        status=Payment.STATUS_PENDING,
+    )
+
+    client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
+    result = client.collect(
+        amount=int(amount),
+        phone=phone_normalized,
+        network=network,
+        reference=reference,
+    )
+
+    logger.info("LivePay collect result ref=%s result=%s", reference, result)
+
+    if result.get("status") == "error" or result.get("status") not in ("success",):
+        payment.status = Payment.STATUS_FAILED
+        payment.save(update_fields=["status"])
+        raise ValueError(f"LivePay rejected payment: {result.get('message', 'Unknown error')}")
+
+    # Store LivePay transaction_id as external_reference for status polling
+    transaction_id = result.get("data", {}).get("transaction_id") or reference
+    payment.external_reference = transaction_id
+    payment.save(update_fields=["external_reference"])
+
+    return payment
+
+
+@transaction.atomic
 def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
     """
     Initiate a Yo! Payments USSD push collection.
@@ -203,6 +272,17 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     payment.save(update_fields=["status", "external_reference"])
 
     logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
+
+    # Credit owner wallet with platform revenue percentage
+    try:
+        config = RevenueConfig.get()
+        if config.percentage > 0:
+            revenue = (payment.amount * config.percentage / Decimal("100")).quantize(Decimal("1"))
+            if revenue > 0:
+                OwnerWallet.credit(revenue)
+                logger.info("Revenue credited UGX %s (%.1f%%) for ref=%s", revenue, config.percentage, reference)
+    except Exception as e:
+        logger.error("Revenue credit failed for ref=%s: %s", reference, e)
 
     # Create subscription (deactivates any existing active subscription first)
     from subscription.services import create_subscription

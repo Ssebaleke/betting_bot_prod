@@ -267,6 +267,11 @@
     <a href="{% url 'dashboard:sms_log' %}" class="nav-item {% block nav_sms_log %}{% endblock %}" onclick="closeSidebar()">
       <span class="icon">📋</span> SMS Log
     </a>
+
+    <div class="nav-section">Finance</div>
+    <a href="{% url 'dashboard:owner_wallet' %}" class="nav-item {% block nav_wallet %}{% endblock %}" onclick="closeSidebar()">
+      <span class="icon">💳</span> My Wallet
+    </a>
   </nav>
   <div class="sidebar-footer">
     <a href="{% url 'dashboard:logout' %}">🚪 Logout – {{ request.user.username }}</a>

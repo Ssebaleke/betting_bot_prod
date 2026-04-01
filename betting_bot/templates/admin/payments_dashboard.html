@@ -8,19 +8,57 @@
   .dash-card.green .value { color: #28a745; }
   .dash-card.orange .value { color: #fd7e14; }
   .dash-card.red .value { color: #dc3545; }
+  .dash-card.purple .value { color: #6f42c1; }
+  .dash-card.teal .value { color: #20c997; }
   table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
   th { background: #417690; color: #fff; padding: 10px 14px; text-align: left; }
   td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
   tr:last-child td { border-bottom: none; }
   h2 { margin: 24px 0 12px; color: #333; }
   .back-link { margin-bottom: 16px; display: inline-block; }
+  .earn-section { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 24px; }
+  .earn-section h3 { margin: 0 0 16px; color: #333; font-size: 1rem; }
+  .earn-badge { display: inline-block; background: #e8f5e9; color: #28a745; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-left: 8px; }
 </style>
 
 <a class="back-link" href="{% url 'admin:payments_payment_changelist' %}">← Back to Payments</a>
 
 <h1>📊 Revenue Dashboard</h1>
 
-<h2>💰 Revenue</h2>
+<!-- ── Platform Earnings ── -->
+<h2>🏦 Platform Earnings</h2>
+<div class="earn-section">
+  <h3>💹 Commission Earnings <span class="earn-badge">{{ commission_percentage }}% per transaction</span></h3>
+  <div class="dash-grid">
+    <div class="dash-card purple">
+      <div class="value">UGX {{ commission_total_earned|floatformat:0 }}</div>
+      <div class="label">Total Commission Earned</div>
+    </div>
+    <div class="dash-card purple">
+      <div class="value">UGX {{ commission_balance|floatformat:0 }}</div>
+      <div class="label">Available Balance</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:16px;">📱 SMS Sales Earnings</h3>
+  <div class="dash-grid">
+    <div class="dash-card teal">
+      <div class="value">UGX {{ sms_total|floatformat:0 }}</div>
+      <div class="label">Total SMS Revenue</div>
+    </div>
+    <div class="dash-card teal">
+      <div class="value">UGX {{ sms_month|floatformat:0 }}</div>
+      <div class="label">SMS Revenue This Month</div>
+    </div>
+    <div class="dash-card teal">
+      <div class="value">UGX {{ sms_today|floatformat:0 }}</div>
+      <div class="label">SMS Revenue Today</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Subscription Revenue ── -->
+<h2>💰 Subscription Revenue</h2>
 <div class="dash-grid">
   <div class="dash-card green">
     <div class="value">UGX {{ total_revenue|floatformat:0 }}</div>

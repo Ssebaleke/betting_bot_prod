@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import date as date_type
 import logging
 
-from predictions.models import Prediction
+from predictions.models import Prediction, PredictionDelivery
 from subscription.models import Subscription
 from bots.notifications import send_telegram_message
 from payments.sms import send_sms
@@ -67,17 +67,29 @@ class Command(BaseCommand):
 
         sent_count = 0
         failed_count = 0
-        notified_users = set()
-        sent_packages = set()  # track packages where at least one subscriber was notified
+        # track per package: how many succeeded vs total attempted
+        package_sent = {}    # pkg_name -> success count
+        package_total = {}   # pkg_name -> total attempted
 
         for subscription in active_subscriptions:
             try:
-                if subscription.user.id in notified_users:
-                    continue
-
                 package_predictions = predictions_by_package.get(subscription.package.name, [])
                 if not package_predictions:
                     continue
+
+                pkg_name = subscription.package.name
+
+                # Skip if already delivered to this user today for this package
+                already_delivered = PredictionDelivery.objects.filter(
+                    user=subscription.user,
+                    send_date=target_date,
+                    package=subscription.package,
+                ).exists()
+                if already_delivered:
+                    self.stdout.write(f"  Skipping {subscription.user.username} — already delivered today")
+                    continue
+
+                package_total[pkg_name] = package_total.get(pkg_name, 0) + 1
 
                 # Determine delivery channel from latest successful payment
                 latest_payment = Payment.objects.filter(
@@ -86,11 +98,11 @@ class Command(BaseCommand):
                 ).order_by("-created_at").first()
                 channel = latest_payment.delivery_channel if latest_payment else Payment.CHANNEL_TELEGRAM
 
-                message = self._build_message(package_predictions, subscription.package.name, target_date)
+                message = self._build_message(package_predictions, pkg_name, target_date)
 
                 if channel == Payment.CHANNEL_SMS:
                     phone = latest_payment.phone
-                    success = send_sms(phone, self._build_sms_message(package_predictions, subscription.package.name, target_date))
+                    success = send_sms(phone, self._build_sms_message(package_predictions, pkg_name, target_date))
                 else:
                     try:
                         telegram_profile = subscription.user.telegramprofile
@@ -104,13 +116,20 @@ class Command(BaseCommand):
 
                 if success:
                     sent_count += 1
-                    notified_users.add(subscription.user.id)
-                    sent_packages.add(subscription.package.name)
+                    package_sent[pkg_name] = package_sent.get(pkg_name, 0) + 1
+                    PredictionDelivery.objects.get_or_create(
+                        user=subscription.user,
+                        send_date=target_date,
+                        package=subscription.package,
+                    )
                     self.stdout.write(self.style.SUCCESS(
-                        f"✓ Sent to {subscription.user.username} ({subscription.package.name})"
+                        f"✓ Sent to {subscription.user.username} ({pkg_name})"
                     ))
                 else:
                     failed_count += 1
+                    self.stdout.write(self.style.ERROR(
+                        f"✗ Failed: {subscription.user.username} ({pkg_name})"
+                    ))
 
             except Exception as e:
                 failed_count += 1
@@ -118,12 +137,27 @@ class Command(BaseCommand):
 
         total_predictions = predictions.count()
 
-        # Mark predictions as sent per package — so late subscribers can receive them
-        if sent_packages:
-            predictions.filter(package__name__in=sent_packages).update(is_sent=True)
-            self.stdout.write(self.style.SUCCESS(f"Predictions marked as sent for packages: {', '.join(sent_packages)}"))
+        # Only mark is_sent=True for packages where ALL subscribers were notified
+        fully_sent_packages = [
+            pkg for pkg in package_total
+            if package_sent.get(pkg, 0) == package_total[pkg]
+        ]
+        partial_packages = [
+            pkg for pkg in package_total
+            if package_sent.get(pkg, 0) < package_total[pkg]
+        ]
+
+        if fully_sent_packages:
+            predictions.filter(package__name__in=fully_sent_packages).update(is_sent=True)
+            self.stdout.write(self.style.SUCCESS(
+                f"Marked is_sent=True for packages (all delivered): {', '.join(fully_sent_packages)}"
+            ))
+        if partial_packages:
+            self.stdout.write(self.style.WARNING(
+                f"NOT marking is_sent for packages with failed deliveries: {', '.join(partial_packages)} — scheduler will retry."
+            ))
         if failed_count > 0:
-            self.stdout.write(self.style.WARNING(f"{failed_count} subscriber(s) failed delivery."))
+            self.stdout.write(self.style.WARNING(f"{failed_count} subscriber(s) failed delivery — will retry on next run."))
 
         self.stdout.write(self.style.SUCCESS(
             f"\n📊 Summary:\n"

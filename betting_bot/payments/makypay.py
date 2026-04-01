@@ -81,7 +81,7 @@ class MakyPayClient:
         print(f"Auth: Basic {auth_header[:20]}...")
 
         try:
-            r = requests.post(url, data=payload, headers=headers, timeout=(5, 25))
+            r = requests.post(url, data=payload, headers=headers, timeout=(5, 15))
             print(f"Response Status: {r.status_code}")
             print(f"Response Body: {r.text}")
         except requests.RequestException as e:
