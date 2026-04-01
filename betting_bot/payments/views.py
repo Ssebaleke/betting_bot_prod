@@ -319,6 +319,26 @@ def payment_status(request, reference):
         except Exception as e:
             logger.error("LivePay status poll error ref=%s: %s", reference, e)
 
+    # For Yoo pending payments, poll Yoo directly
+    if payment.status == Payment.STATUS_PENDING and payment.provider_type == Payment.PROVIDER_YOO:
+        try:
+            from .models import YooPaymentProvider
+            from .yoo_client import YooClient
+            provider = YooPaymentProvider.objects.filter(is_active=True).first()
+            if provider:
+                client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
+                result = client.check_status(payment.reference)
+                logger.warning("YOO STATUS POLL ref=%s result=%s", reference, result)
+                yoo_status = result.get("yoo_status", "")
+                if yoo_status == "SUCCESS":
+                    confirm_payment(reference=payment.reference, external_reference=result.get("transaction_reference"))
+                    payment.refresh_from_db()
+                elif yoo_status == "FAILED":
+                    payment.status = Payment.STATUS_FAILED
+                    payment.save(update_fields=["status"])
+        except Exception as e:
+            logger.error("Yoo status poll error ref=%s: %s", reference, e)
+
     return JsonResponse({
         "success": True,
         "reference": payment.reference,
