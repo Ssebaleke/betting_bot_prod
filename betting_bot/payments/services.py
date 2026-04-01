@@ -289,6 +289,17 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
+    # Credit owner wallet based on revenue percentage
+    try:
+        from .models import RevenueConfig, OwnerWallet
+        config = RevenueConfig.get()
+        if config.percentage > 0:
+            revenue = (payment.amount * config.percentage / 100).quantize(Decimal("0.01"))
+            OwnerWallet.credit(revenue)
+            logger.info("Wallet credited UGX %s (%.0f%% of %s) ref=%s", revenue, config.percentage, payment.amount, reference)
+    except Exception as e:
+        logger.error("Wallet credit failed for ref=%s: %s", reference, e)
+
     # Send SMS confirmation for web/SMS channel payments
     if payment.delivery_channel == Payment.CHANNEL_SMS:
         try:
