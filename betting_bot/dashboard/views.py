@@ -66,19 +66,21 @@ def home(request):
     pending_payments = Payment.objects.filter(status=Payment.STATUS_PENDING).count()
     failed_payments = Payment.objects.filter(status=Payment.STATUS_FAILED).count()
 
-    daily = (
-        success_qs.filter(created_at__date__gte=week_ago)
+    daily = [
+        {"day": item["day"].strftime("%b %d"), "total": float(item["total"] or 0)}
+        for item in success_qs.filter(created_at__date__gte=week_ago)
         .annotate(day=TruncDate("created_at"))
         .values("day")
         .annotate(total=Sum("amount"), count=Count("id"))
         .order_by("day")
-    )
+    ]
 
-    per_package = (
-        success_qs.values("package__name")
+    per_package = [
+        {"package__name": item["package__name"] or "Unknown", "total": float(item["total"] or 0)}
+        for item in success_qs.values("package__name")
         .annotate(total=Sum("amount"), count=Count("id"))
         .order_by("-total")
-    )
+    ]
 
     recent_payments = Payment.objects.select_related("user", "package").order_by("-created_at")[:8]
     predictions_today = Prediction.objects.filter(send_date=today, is_active=True).count()
