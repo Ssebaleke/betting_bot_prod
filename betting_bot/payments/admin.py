@@ -36,11 +36,11 @@ class SMSBalanceAdmin(admin.ModelAdmin):
     readonly_fields = ("credits", "updated_at")
     fieldsets = (
         ("💰 SMS Pricing (Set by Super Admin)", {
-            "description": "Set the price per SMS credit charged to the owner. The owner pays this amount per SMS sent to subscribers.",
+            "description": "Set the price per SMS credit charged to the owner.",
             "fields": ("price_per_sms",),
         }),
         ("📊 Current Balance (Auto-managed)", {
-            "description": "Credits are added automatically when the owner tops up via Mobile Money. Do not edit manually.",
+            "description": "Credits are added automatically when the owner tops up via Mobile Money.",
             "fields": ("credits", "updated_at"),
         }),
     )
@@ -61,13 +61,11 @@ class SMSBalanceAdmin(admin.ModelAdmin):
         if request.method == "POST":
             try:
                 credits = int(request.POST.get("credits", 0))
-                note = request.POST.get("note", "Manual top-up by super admin").strip()
                 if credits <= 0:
                     raise ValueError("Credits must be a positive number.")
                 balance = SMSBalance.get()
                 balance.credits += credits
                 balance.save(update_fields=["credits", "updated_at"])
-                # Log it as an SMSTopUp record
                 import uuid
                 SMSTopUp.objects.create(
                     phone="admin",
@@ -76,7 +74,7 @@ class SMSBalanceAdmin(admin.ModelAdmin):
                     payment_reference=f"manual-{uuid.uuid4().hex[:12]}",
                     status=SMSTopUp.STATUS_SUCCESS,
                 )
-                self.message_user(request, f"✅ Successfully added {credits} SMS credits. New balance: {balance.credits}.", messages.SUCCESS)
+                self.message_user(request, f"✅ Added {credits} SMS credits. New balance: {balance.credits}.", messages.SUCCESS)
             except Exception as e:
                 self.message_user(request, f"❌ Error: {e}", messages.ERROR)
             return redirect("/admin/payments/smsbalance/1/change/")
@@ -139,17 +137,35 @@ class YooPaymentProviderAdmin(admin.ModelAdmin):
         ("Status", {"fields": ("is_active",)}),
     )
 
+    def save_model(self, request, obj, form, change):
+        if obj.is_active:
+            LivePayProvider.objects.update(is_active=False)
+            YooPaymentProvider.objects.exclude(pk=obj.pk).update(is_active=False)
+            self.message_user(request, "✅ Yo! Payments activated. All other providers deactivated.", messages.SUCCESS)
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(LivePayProvider)
+class LivePayProviderAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "created_at")
+    list_editable = ("is_active",)
+    fieldsets = (
+        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin", "withdrawal_fee")}),
+        ("Status", {"fields": ("is_active",)}),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if obj.is_active:
+            YooPaymentProvider.objects.update(is_active=False)
+            LivePayProvider.objects.exclude(pk=obj.pk).update(is_active=False)
+            self.message_user(request, "✅ LivePay activated. All other providers deactivated.", messages.SUCCESS)
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
     list_display = (
-        "reference",
-        "user_info",
-        "package",
-        "phone",
-        "amount",
-        "colored_status",
-        "created_at",
+        "reference", "user_info", "package", "phone", "amount", "colored_status", "created_at",
     )
     list_filter = ("status", "provider", "created_at")
     search_fields = ("reference", "phone", "user__username")
@@ -164,29 +180,18 @@ class PaymentAdmin(admin.ModelAdmin):
     def dashboard_view(self, request):
         today = timezone.now().date()
         this_month_start = today.replace(day=1)
-
         qs = Payment.objects.filter(status=Payment.STATUS_SUCCESS)
-
         total_revenue = qs.aggregate(t=Sum("amount"))["t"] or 0
         today_revenue = qs.filter(created_at__date=today).aggregate(t=Sum("amount"))["t"] or 0
         month_revenue = qs.filter(created_at__date__gte=this_month_start).aggregate(t=Sum("amount"))["t"] or 0
         total_payments = qs.count()
         failed_payments = Payment.objects.filter(status=Payment.STATUS_FAILED).count()
         pending_payments = Payment.objects.filter(status=Payment.STATUS_PENDING).count()
-
         from subscription.models import Subscription
         active_subscribers = Subscription.objects.filter(is_active=True).count()
         new_today = Subscription.objects.filter(created_at__date=today).count()
         new_this_month = Subscription.objects.filter(created_at__date__gte=this_month_start).count()
-
-        # Revenue per package
-        per_package = (
-            qs.values("package__name")
-            .annotate(total=Sum("amount"), count=Count("id"))
-            .order_by("-total")
-        )
-
-        # Last 7 days daily revenue
+        per_package = qs.values("package__name").annotate(total=Sum("amount"), count=Count("id")).order_by("-total")
         from django.db.models.functions import TruncDate
         daily = (
             qs.filter(created_at__date__gte=today - timezone.timedelta(days=6))
@@ -195,19 +200,10 @@ class PaymentAdmin(admin.ModelAdmin):
             .annotate(total=Sum("amount"), count=Count("id"))
             .order_by("day")
         )
-
-        # Commission earnings from owner wallet
-        from payments.models import OwnerWallet, RevenueConfig, SMSTopUp
+        from payments.models import OwnerWallet, RevenueConfig
         wallet = OwnerWallet.get()
         config = RevenueConfig.get()
-        commission_today = SMSTopUp.objects.none()  # placeholder
-
-        # SMS earnings
         sms_qs = SMSTopUp.objects.filter(status=SMSTopUp.STATUS_SUCCESS)
-        sms_total = sms_qs.aggregate(t=Sum("amount_paid"))["t"] or 0
-        sms_today = sms_qs.filter(created_at__date=today).aggregate(t=Sum("amount_paid"))["t"] or 0
-        sms_month = sms_qs.filter(created_at__date__gte=this_month_start).aggregate(t=Sum("amount_paid"))["t"] or 0
-
         context = {
             **self.admin_site.each_context(request),
             "title": "Revenue Dashboard",
@@ -222,14 +218,12 @@ class PaymentAdmin(admin.ModelAdmin):
             "new_this_month": new_this_month,
             "per_package": per_package,
             "daily": daily,
-            # commission
             "commission_balance": wallet.balance,
             "commission_total_earned": wallet.total_earned,
             "commission_percentage": config.percentage,
-            # sms
-            "sms_total": sms_total,
-            "sms_today": sms_today,
-            "sms_month": sms_month,
+            "sms_total": sms_qs.aggregate(t=Sum("amount_paid"))["t"] or 0,
+            "sms_today": sms_qs.filter(created_at__date=today).aggregate(t=Sum("amount_paid"))["t"] or 0,
+            "sms_month": sms_qs.filter(created_at__date__gte=this_month_start).aggregate(t=Sum("amount_paid"))["t"] or 0,
         }
         return render(request, "admin/payments_dashboard.html", context)
 
@@ -253,39 +247,15 @@ class PaymentAdmin(admin.ModelAdmin):
     def user_info(self, obj):
         try:
             telegram_profile = obj.user.telegramprofile
-            telegram_username = telegram_profile.username or 'N/A'
-            return format_html(
-                '<strong>{}</strong><br/><small>@{}</small>',
-                obj.user.username,
-                telegram_username
-            )
+            return format_html('<strong>{}</strong><br/><small>@{}</small>', obj.user.username, telegram_profile.username or "N/A")
         except:
             return obj.user.username
-    user_info.short_description = 'User'
+    user_info.short_description = "User"
 
     def colored_status(self, obj):
-        colors = {
-            Payment.STATUS_SUCCESS: 'green',
-            Payment.STATUS_FAILED: 'red',
-            Payment.STATUS_PENDING: 'orange',
-        }
-        color = colors.get(obj.status, 'gray')
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            obj.get_status_display()
-        )
-    colored_status.short_description = 'Status'
-
-
-@admin.register(LivePayProvider)
-class LivePayProviderAdmin(admin.ModelAdmin):
-    list_display = ("name", "is_active", "created_at")
-    list_editable = ("is_active",)
-    fieldsets = (
-        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin")}),
-        ("Status", {"fields": ("is_active",)}),
-    )
+        colors = {Payment.STATUS_SUCCESS: "green", Payment.STATUS_FAILED: "red", Payment.STATUS_PENDING: "orange"}
+        return format_html('<span style="color:{};font-weight:bold;">{}</span>', colors.get(obj.status, "gray"), obj.get_status_display())
+    colored_status.short_description = "Status"
 
 
 @admin.register(RevenueConfig)
