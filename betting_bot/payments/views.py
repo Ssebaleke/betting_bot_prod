@@ -298,6 +298,27 @@ def payment_status(request, reference):
     except Payment.DoesNotExist:
         return HttpResponseBadRequest("Invalid reference")
 
+    # For LivePay pending payments, poll LivePay directly
+    if payment.status == Payment.STATUS_PENDING and payment.provider_type == Payment.PROVIDER_LIVE:
+        try:
+            from .models import LivePayProvider
+            from .live_client import LivePayClient
+            provider = LivePayProvider.objects.filter(is_active=True).first()
+            if provider and payment.external_reference:
+                client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
+                result = client.check_status(payment.external_reference)
+                logger.warning("LIVEPAY STATUS POLL ref=%s result=%s", reference, result)
+                status_val = str(result.get("status", "")).lower()
+                txn_status = str(result.get("data", {}).get("status", "")).lower()
+                if status_val == "success" and txn_status in ("approved", "success", "completed"):
+                    confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
+                    payment.refresh_from_db()
+                elif txn_status in ("failed", "cancelled"):
+                    payment.status = Payment.STATUS_FAILED
+                    payment.save(update_fields=["status"])
+        except Exception as e:
+            logger.error("LivePay status poll error ref=%s: %s", reference, e)
+
     return JsonResponse({
         "success": True,
         "reference": payment.reference,
