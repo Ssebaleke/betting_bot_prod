@@ -41,6 +41,9 @@
                 <div class="col-md-3">
                     <label class="form-label">Amount (UGX)</label>
                     <input type="number" id="wAmount" class="form-control" placeholder="Min 10,000" min="10000">
+                    {% if config.withdrawal_fee %}
+                    <small class="text-muted">Fee: UGX {{ provider.withdrawal_fee|floatformat:0 }} will be added</small>
+                    {% endif %}
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Phone Number</label>

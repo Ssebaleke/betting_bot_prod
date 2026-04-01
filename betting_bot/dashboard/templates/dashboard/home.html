@@ -7,22 +7,22 @@
 <!-- REVENUE CARDS -->
 <div class="stat-grid">
   <div class="stat-card green">
-    <div class="stat-label">Total Revenue</div>
+    <div class="stat-label">💰 Total Revenue</div>
     <div class="stat-value">UGX {{ total_revenue|floatformat:0 }}</div>
     <div class="stat-sub">All time</div>
   </div>
-  <div class="stat-card green">
-    <div class="stat-label">This Month</div>
+  <div class="stat-card teal">
+    <div class="stat-label">📅 This Month</div>
     <div class="stat-value">UGX {{ month_revenue|floatformat:0 }}</div>
     <div class="stat-sub">Current month</div>
   </div>
   <div class="stat-card gold">
-    <div class="stat-label">This Week</div>
+    <div class="stat-label">📆 This Week</div>
     <div class="stat-value">UGX {{ week_revenue|floatformat:0 }}</div>
     <div class="stat-sub">Last 7 days</div>
   </div>
-  <div class="stat-card gold">
-    <div class="stat-label">Today</div>
+  <div class="stat-card orange">
+    <div class="stat-label">☀️ Today</div>
     <div class="stat-value">UGX {{ today_revenue|floatformat:0 }}</div>
     <div class="stat-sub">Today only</div>
   </div>
@@ -30,45 +30,48 @@
 
 <!-- WALLET BALANCE CARD -->
 <div style="margin-bottom:24px;">
-  <div class="card" style="background:linear-gradient(135deg,#1a2e1a,#1e2330); border-color:rgba(0,200,83,.3); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+  <div style="background:linear-gradient(135deg,#1565c0,#6a1b9a); border-radius:16px; padding:24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
     <div>
-      <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:6px;">💳 My Wallet Balance</div>
-      <div style="font-size:32px; font-weight:800; color:var(--green);">UGX {{ wallet.balance|floatformat:0 }}</div>
-      <div style="font-size:12px; color:var(--muted); margin-top:4px;">Total earned: UGX {{ wallet.total_earned|floatformat:0 }}</div>
+      <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:rgba(255,255,255,.7); margin-bottom:6px;">💳 Wallet Balance</div>
+      <div style="font-size:36px; font-weight:800; color:#fff;">UGX {{ wallet.balance|floatformat:0 }}</div>
+      <div style="font-size:12px; color:rgba(255,255,255,.6); margin-top:4px;">Total earned all time: UGX {{ wallet.total_earned|floatformat:0 }}</div>
     </div>
-    <a href="{% url 'dashboard:owner_wallet' %}" class="btn btn-green" style="white-space:nowrap;">💰 Withdraw Funds</a>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a href="{% url 'dashboard:owner_wallet' %}" style="background:#00c853; color:#000; font-weight:700; font-size:13px; padding:10px 20px; border-radius:8px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">💰 Withdraw</a>
+      <button onclick="resetWallet()" style="background:rgba(255,255,255,.15); color:#fff; font-weight:700; font-size:13px; padding:10px 20px; border-radius:8px; border:1px solid rgba(255,255,255,.3); cursor:pointer;">🔄 Reset Balance</button>
+    </div>
   </div>
 </div>
 
 <!-- SUBSCRIBER & PAYMENT CARDS -->
 <div class="stat-grid">
   <div class="stat-card blue">
-    <div class="stat-label">Active Subscribers</div>
+    <div class="stat-label">👥 Active Subscribers</div>
     <div class="stat-value">{{ active_subs }}</div>
     <div class="stat-sub">{{ new_today }} new today · {{ new_month }} this month</div>
   </div>
-  <div class="stat-card orange">
-    <div class="stat-label">Expiring Soon</div>
+  <div class="stat-card pink">
+    <div class="stat-label">⏳ Expiring Soon</div>
     <div class="stat-value">{{ expiring_soon }}</div>
     <div class="stat-sub">Within 3 days</div>
   </div>
   <div class="stat-card green">
-    <div class="stat-label">Successful Payments</div>
+    <div class="stat-label">✅ Successful Payments</div>
     <div class="stat-value">{{ total_payments }}</div>
     <div class="stat-sub">All time</div>
   </div>
-  <div class="stat-card orange">
-    <div class="stat-label">Pending</div>
+  <div class="stat-card gold">
+    <div class="stat-label">⏱ Pending</div>
     <div class="stat-value">{{ pending_payments }}</div>
     <div class="stat-sub">Awaiting confirmation</div>
   </div>
   <div class="stat-card red">
-    <div class="stat-label">Failed</div>
+    <div class="stat-label">❌ Failed</div>
     <div class="stat-value">{{ failed_payments }}</div>
     <div class="stat-sub">Not completed</div>
   </div>
-  <div class="stat-card blue">
-    <div class="stat-label">Predictions Today</div>
+  <div class="stat-card teal">
+    <div class="stat-label">🎯 Predictions Today</div>
     <div class="stat-value">{{ predictions_today }}</div>
     <div class="stat-sub">{{ predictions_pending }} pending to send</div>
   </div>
@@ -159,5 +162,16 @@
       }
     }
   });
+
+  function resetWallet() {
+    if (!confirm('Reset wallet balance to 0? This cannot be undone. Total earned will be preserved.')) return;
+    fetch("{% url 'dashboard:wallet_reset' %}", {
+      method: 'POST',
+      headers: {'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(d => { if (d.success) location.reload(); else alert(d.error); })
+    .catch(() => alert('Request failed'));
+  }
 </script>
 {% endblock %}

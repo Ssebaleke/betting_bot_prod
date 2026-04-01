@@ -182,7 +182,8 @@ def initiate_live_payment(user: User, package: Package, phone: str, delivery_cha
 
     logger.info("LivePay collect result ref=%s result=%s", reference, result)
 
-    if result.get("status") == "error" or result.get("status") not in ("success",):
+    # Only fail if explicit error — pending/processing are valid initiation states
+    if result.get("status") == "error":
         payment.status = Payment.STATUS_FAILED
         payment.save(update_fields=["status"])
         raise ValueError(f"LivePay rejected payment: {result.get('message', 'Unknown error')}")
@@ -284,21 +285,10 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     except Exception as e:
         logger.error("Revenue credit failed for ref=%s: %s", reference, e)
 
-    # Create subscription (deactivates any existing active subscription first)
+    # Create subscription
     from subscription.services import create_subscription
     subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
-
-    # Credit owner wallet based on revenue percentage
-    try:
-        from .models import RevenueConfig, OwnerWallet
-        config = RevenueConfig.get()
-        if config.percentage > 0:
-            revenue = (payment.amount * config.percentage / 100).quantize(Decimal("0.01"))
-            OwnerWallet.credit(revenue)
-            logger.info("Wallet credited UGX %s (%.0f%% of %s) ref=%s", revenue, config.percentage, payment.amount, reference)
-    except Exception as e:
-        logger.error("Wallet credit failed for ref=%s: %s", reference, e)
 
     # Send SMS confirmation for web/SMS channel payments
     if payment.delivery_channel == Payment.CHANNEL_SMS:

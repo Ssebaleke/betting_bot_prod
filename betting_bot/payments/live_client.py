@@ -117,15 +117,19 @@ class LivePayClient:
 
     @staticmethod
     def verify_webhook_signature(secret_key: str, signature_header: str, payload: dict) -> bool:
+        """
+        Verify LivePay webhook signature.
+        Header format: livepay-signature: t=TIMESTAMP,v=SIGNATURE
+        Signed data: timestamp + sorted(key+value pairs)
+        """
         try:
-            parts = {}
-            for part in signature_header.split(","):
-                k, v = part.split("=", 1)
-                parts[k.strip()] = v.strip()
-            timestamp = parts.get("t", "")
-            received_sig = parts.get("v", "")
-            if not timestamp or not received_sig:
+            import re
+            match = re.match(r't=([0-9]+),v=([a-f0-9]{64})', signature_header or '')
+            if not match:
                 return False
+            timestamp = match.group(1)
+            received_sig = match.group(2)
+            # Reject if older than 5 minutes
             if abs(time.time() - int(timestamp)) > 300:
                 return False
             signed_data = timestamp

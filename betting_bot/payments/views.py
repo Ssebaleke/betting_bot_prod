@@ -377,7 +377,10 @@ def initiate_live_payment_view(request):
 
 @csrf_exempt
 def live_ipn(request):
-    """POST /pay/webhook/live/ipn/ — LivePay webhook."""
+    """POST /pay/webhook/live/ipn/ — LivePay webhook.
+    Payload fields: status, transaction_id, reference_id, phone, amount, payment_method, charge_amount
+    Header: livepay-signature: t=TIMESTAMP,v=SIGNATURE
+    """
     if request.method != "POST":
         return HttpResponse("OK")
 
@@ -386,37 +389,41 @@ def live_ipn(request):
     except Exception:
         data = {}
 
-    logger.warning("LIVEPAY IPN: %s", data)
+    logger.warning("LIVEPAY IPN received: %s", data)
 
-    # reference is our original UUID without hyphens
-    reference = data.get("reference") or data.get("reference_id") or data.get("transaction_id")
-    status = str(data.get("status", "")).lower()
-    is_success = status in ("approved", "success")
-    is_failed = status in ("failed", "cancelled")
+    # Verify signature
+    from .models import LivePayProvider
+    from .live_client import LivePayClient
+    provider = LivePayProvider.objects.filter(is_active=True).first()
+    if provider:
+        sig_header = request.headers.get("livepay-signature", "")
+        if sig_header and not LivePayClient.verify_webhook_signature(provider.secret_key, sig_header, data):
+            logger.warning("LIVEPAY IPN: invalid signature — rejecting")
+            return HttpResponse(json.dumps({"error": "Invalid signature"}), status=401, content_type="application/json")
 
-    if not reference:
-        logger.warning("LIVEPAY IPN: no reference — ignoring")
-        return HttpResponse("OK")
+    # Fields per LivePay docs
+    status = str(data.get("status", "")).strip()       # Approved / Failed / Pending / Cancelled
+    transaction_id = data.get("transaction_id", "")    # LivePay transaction ID
+    reference_id = data.get("reference_id", "")        # our original reference
+
+    if not reference_id:
+        logger.warning("LIVEPAY IPN: no reference_id — ignoring")
+        return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
+
+    is_success = status.lower() == "approved"
+    is_failed = status.lower() in ("failed", "cancelled")
 
     if is_success:
         try:
             from django.db import transaction as db_tx
             with db_tx.atomic():
-                payment = (
-                    Payment.objects.select_for_update().filter(reference=reference).first()
-                    or Payment.objects.select_for_update().filter(external_reference=reference).first()
-                )
+                payment = Payment.objects.select_for_update().filter(reference=reference_id).first()
                 if not payment:
-                    # try formatting as UUID
-                    if len(reference) == 32:
-                        fmt = f"{reference[:8]}-{reference[8:12]}-{reference[12:16]}-{reference[16:20]}-{reference[20:]}"
-                        payment = Payment.objects.select_for_update().filter(reference=fmt).first()
-                if not payment:
-                    logger.warning("LIVEPAY IPN: no payment found for reference=%s", reference)
-                    return HttpResponse("OK")
+                    logger.warning("LIVEPAY IPN: no payment found for reference_id=%s", reference_id)
+                    return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
                 if payment.status == Payment.STATUS_SUCCESS:
-                    return HttpResponse("OK")
-                confirm_payment(reference=payment.reference, external_reference=data.get("transaction_id"))
+                    return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
+                confirm_payment(reference=payment.reference, external_reference=transaction_id)
             try:
                 payment.refresh_from_db()
                 if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
@@ -429,13 +436,11 @@ def live_ipn(request):
 
     elif is_failed:
         try:
-            payment = (
-                Payment.objects.filter(reference=reference).first()
-                or Payment.objects.filter(external_reference=reference).first()
-            )
+            payment = Payment.objects.filter(reference=reference_id).first()
             if payment and payment.status == Payment.STATUS_PENDING:
                 payment.status = Payment.STATUS_FAILED
-                payment.save(update_fields=["status"])
+                payment.external_reference = transaction_id
+                payment.save(update_fields=["status", "external_reference"])
                 try:
                     from bots.notifications import notify_payment_failed
                     notify_payment_failed(payment.user, payment.package, payment)
@@ -444,4 +449,4 @@ def live_ipn(request):
         except Exception as e:
             logger.error("LIVEPAY IPN failed handler error: %s", e)
 
-    return HttpResponse(json.dumps({"status": "received"}), content_type="application/json")
+    return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")

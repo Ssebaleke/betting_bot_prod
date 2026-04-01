@@ -520,14 +520,29 @@ def sms_topup_pay(request):
 
 
 @owner_required
+def wallet_reset(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST only"}, status=405)
+    from payments.models import OwnerWallet
+    from django.db import transaction as db_tx
+    with db_tx.atomic():
+        wallet = OwnerWallet.objects.select_for_update().get_or_create(pk=1)[0]
+        wallet.balance = 0
+        wallet.save(update_fields=["balance", "updated_at"])
+    return JsonResponse({"success": True})
+
+
+@owner_required
 def owner_wallet(request):
-    from payments.models import OwnerWallet, WithdrawalRequest, RevenueConfig
+    from payments.models import OwnerWallet, WithdrawalRequest, RevenueConfig, LivePayProvider
     wallet = OwnerWallet.get()
     config = RevenueConfig.get()
+    provider = LivePayProvider.objects.filter(is_active=True).first()
     withdrawals = WithdrawalRequest.objects.order_by("-created_at")[:20]
     return render(request, "dashboard/owner_wallet.html", {
         "wallet": wallet,
         "config": config,
+        "provider": provider,
         "withdrawals": withdrawals,
     })
 
@@ -560,8 +575,11 @@ def owner_withdraw(request):
         return JsonResponse({"success": False, "error": "Minimum withdrawal is UGX 10,000"}, status=400)
 
     wallet = OwnerWallet.get()
-    if amount > wallet.balance:
-        return JsonResponse({"success": False, "error": "Insufficient wallet balance"}, status=400)
+    fee = provider.withdrawal_fee or Decimal("0")
+    total_deducted = amount + fee
+
+    if total_deducted > wallet.balance:
+        return JsonResponse({"success": False, "error": f"Insufficient wallet balance. Need UGX {int(total_deducted):,} (amount + UGX {int(fee):,} fee)"}, status=400)
 
     provider = LivePayProvider.objects.filter(is_active=True).first()
     if not provider:
@@ -597,9 +615,9 @@ def owner_withdraw(request):
     from django.db import transaction as db_tx
     with db_tx.atomic():
         locked = OwnerWallet.objects.select_for_update().get(pk=1)
-        if amount > locked.balance:
+        if total_deducted > locked.balance:
             return JsonResponse({"success": False, "error": "Insufficient balance"}, status=400)
-        locked.balance -= amount
+        locked.balance -= total_deducted
         locked.save(update_fields=["balance", "updated_at"])
 
         WithdrawalRequest.objects.create(
@@ -609,4 +627,4 @@ def owner_withdraw(request):
             status=WithdrawalRequest.STATUS_PAID,
         )
 
-    return JsonResponse({"success": True, "message": f"UGX {int(amount):,} sent to {phone}"})
+    return JsonResponse({"success": True, "message": f"UGX {int(amount):,} sent to {phone}. Fee: UGX {int(fee):,}"})
