@@ -55,25 +55,6 @@ class Command(BaseCommand):
             subscription.save(update_fields=['is_active'])
             count += 1
 
-            if subscription.expiry_notified:
-                continue
-
-            try:
-                message = (
-                    "⏰ *Subscription Expired*\n\n"
-                    f"📦 Package: *{subscription.package.name}*\n"
-                    f"📅 Expired: {subscription.end_date.strftime('%B %d, %Y')}\n\n"
-                    "Renew to keep receiving predictions. Use /start to subscribe."
-                )
-                self._notify(subscription.user, message)
-                subscription.expiry_notified = True
-                subscription.save(update_fields=['expiry_notified'])
-                self.stdout.write(self.style.WARNING(
-                    f"⏰ Expired & notified: {subscription.user.username}"
-                ))
-            except Exception as e:
-                logger.error(f"Failed to notify expired user {subscription.user.username}: {e}")
-
         self.stdout.write(self.style.SUCCESS(f"Deactivated {count} expired subscriptions"))
 
     def send_expiry_reminders(self, now):
