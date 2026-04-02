@@ -314,7 +314,8 @@ def payment_status(request, reference):
                 result = client.check_status(payment.external_reference)
                 logger.warning("LIVEPAY STATUS POLL ref=%s result=%s", reference, result)
                 status_val = str(result.get("status", "")).lower()
-                txn_status = str(result.get("data", {}).get("status", "")).lower()
+                # LivePay status response: result["transaction"]["status"]
+                txn_status = str(result.get("transaction", {}).get("status", "")).lower()
                 if status_val == "success" and txn_status in ("approved", "success", "completed"):
                     confirmed = confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
                     from .services import _post_payment_notifications
