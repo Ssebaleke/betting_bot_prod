@@ -257,14 +257,10 @@ def initiate_yoo_payment(user: User, package: Package, phone: str, delivery_chan
 
 @transaction.atomic
 def confirm_payment(reference: str, external_reference: str | None = None) -> Payment:
-    """
-    Webhook confirms payment and creates subscription.
-    """
     from subscription.models import Subscription
-    
+
     payment = Payment.objects.select_for_update().get(reference=reference)
 
-    # idempotent
     if payment.status == Payment.STATUS_SUCCESS:
         return payment
 
@@ -274,65 +270,68 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
 
     logger.info("Payment SUCCESS ref=%s ext_ref=%s", reference, external_reference)
 
-    # Credit owner wallet with platform revenue percentage
     try:
         config = RevenueConfig.get()
         if config.percentage > 0:
             revenue = (payment.amount * config.percentage / Decimal("100")).quantize(Decimal("1"))
             if revenue > 0:
                 OwnerWallet.credit(revenue)
-                logger.info("Revenue credited UGX %s (%.1f%%) for ref=%s", revenue, config.percentage, reference)
+                logger.info("Revenue credited UGX %s for ref=%s", revenue, reference)
     except Exception as e:
         logger.error("Revenue credit failed for ref=%s: %s", reference, e)
 
-    # Create subscription
     from subscription.services import create_subscription
     subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
-    # Send SMS confirmation for web/SMS channel payments
+    # Schedule post-commit actions (SMS + predictions) so they don't rollback the transaction
+    from django.db import transaction as db_tx
+    db_tx.on_commit(lambda: _post_payment_notifications(payment.id, subscription.id))
+
+    return payment
+
+
+def _post_payment_notifications(payment_id: int, subscription_id: int):
+    """Runs after transaction commits — sends SMS confirmation and today's predictions."""
+    try:
+        payment = Payment.objects.get(id=payment_id)
+        from subscription.models import Subscription
+        subscription = Subscription.objects.get(id=subscription_id)
+    except Exception as e:
+        logger.error("_post_payment_notifications: failed to load objects: %s", e)
+        return
+
+    # SMS confirmation
     if payment.delivery_channel == Payment.CHANNEL_SMS:
         try:
             from .sms import send_sms
-            from django.utils import timezone
             expiry = timezone.localtime(subscription.end_date).strftime("%B %d, %Y")
             send_sms(
                 payment.phone,
                 f"Payment confirmed! UGX {int(payment.amount):,} received. "
-                f"You are now subscribed to {payment.package.name} package until {expiry}. "
-                f"You will receive daily predictions on this number. Bet Responsibly!"
+                f"You are now subscribed to {payment.package.name} until {expiry}. "
+                f"Daily predictions will be sent to this number. Bet Responsibly!"
             )
         except Exception as e:
-            logger.error("SMS confirmation failed for ref=%s: %s", reference, e)
+            logger.error("SMS confirmation failed for ref=%s: %s", payment.reference, e)
 
-    # Send today's predictions for matches that haven't kicked off yet
+    # Send today's predictions
     try:
         from predictions.models import Prediction
         local_now = timezone.localtime(timezone.now())
         today = local_now.date()
-        current_time = local_now.time()
 
-        # Try today's unsent predictions first (matches not yet kicked off)
         today_predictions = list(Prediction.objects.filter(
-            is_active=True,
-            is_sent=True,
-            send_date=today,
-            package=payment.package,
+            is_active=True, is_sent=True, send_date=today, package=payment.package,
         ).order_by('match_time'))
 
-        # Fallback: most recently sent predictions for this package
         if not today_predictions:
             latest_send_date = Prediction.objects.filter(
-                is_active=True,
-                is_sent=True,
-                package=payment.package,
+                is_active=True, is_sent=True, package=payment.package,
             ).order_by('-send_date').values_list('send_date', flat=True).first()
             if latest_send_date:
                 today_predictions = list(Prediction.objects.filter(
-                    is_active=True,
-                    is_sent=True,
-                    send_date=latest_send_date,
-                    package=payment.package,
+                    is_active=True, is_sent=True, send_date=latest_send_date, package=payment.package,
                 ).order_by('match_time'))
 
         if today_predictions:
@@ -343,11 +342,11 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
             else:
                 message = _build_predictions_message(today_predictions, payment.package.name, today)
                 _deliver_predictions(payment.user, payment.phone, payment.delivery_channel, message)
-            logger.info("Sent today's predictions to new subscriber user=%s channel=%s", payment.user.id, payment.delivery_channel)
+            logger.info("Sent predictions to new subscriber user=%s channel=%s", payment.user.id, payment.delivery_channel)
+        else:
+            logger.info("No predictions available to send for new subscriber user=%s", payment.user.id)
     except Exception as e:
         logger.error("Failed to send predictions to new subscriber: %s", e)
-
-    return payment
 
 
 def _deliver_predictions(user, phone: str, channel: str, message: str):
