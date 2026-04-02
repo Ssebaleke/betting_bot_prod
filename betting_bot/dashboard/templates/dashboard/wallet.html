@@ -1,0 +1,113 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Wallet{% endblock %}
+{% block page_title %}Wallet{% endblock %}
+{% block nav_wallet %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>💳 Owner Wallet</h1>
+</div>
+
+<!-- BALANCE CARDS -->
+<div class="stat-grid" style="max-width:700px; margin-bottom:24px;">
+  <div class="stat-card green">
+    <div class="stat-label">Available Balance</div>
+    <div class="stat-value">UGX {{ wallet.balance|floatformat:0 }}</div>
+    <div class="stat-sub">Ready to withdraw</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-label">Total Earned</div>
+    <div class="stat-value">UGX {{ wallet.total_earned|floatformat:0 }}</div>
+    <div class="stat-sub">All time platform revenue</div>
+  </div>
+  <div class="stat-card gold">
+    <div class="stat-label">Commission Rate</div>
+    <div class="stat-value">{{ config.percentage }}%</div>
+    <div class="stat-sub">Per transaction</div>
+  </div>
+</div>
+
+<!-- WITHDRAW FORM -->
+<div class="card" style="max-width:480px; margin-bottom:28px;">
+  <div style="font-size:15px; font-weight:700; margin-bottom:16px;">💸 Withdraw to Mobile Money</div>
+  <form method="post" action="{% url 'dashboard:wallet_withdraw' %}">
+    {% csrf_token %}
+    <div class="form-group" style="margin-bottom:14px;">
+      <label>Amount (UGX)</label>
+      <input type="number" name="amount" min="500" max="{{ wallet.balance|floatformat:0 }}"
+        placeholder="e.g. 50000" required />
+      <div style="font-size:11px; color:var(--muted); margin-top:4px;">Min: UGX 500 · Available: UGX {{ wallet.balance|floatformat:0 }}</div>
+    </div>
+    <div class="form-group" style="margin-bottom:20px;">
+      <label>Mobile Money Number</label>
+      <div style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+        <div style="background:var(--surface); padding:0 12px; display:flex; align-items:center; font-size:13px; color:var(--muted); border-right:1px solid var(--border);">🇺🇬 +256</div>
+        <input type="tel" name="phone" placeholder="7XXXXXXXX" maxlength="12"
+          style="border:none; border-radius:0;" required />
+      </div>
+    </div>
+    {% if wallet.balance < 500 %}
+    <div style="background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3); color:var(--danger); border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:14px;">
+      ⚠️ Insufficient balance to withdraw. Minimum is UGX 500.
+    </div>
+    {% endif %}
+    <button type="submit" class="btn btn-green" style="width:100%;"
+      {% if wallet.balance < 500 %}disabled{% endif %}
+      onclick="return confirm('Confirm withdrawal of UGX ' + document.querySelector('[name=amount]').value + ' to ' + document.querySelector('[name=phone]').value + '?')">
+      💸 Withdraw Now
+    </button>
+  </form>
+</div>
+
+<!-- WITHDRAWAL HISTORY -->
+<div class="card">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+    <div style="font-size:14px; font-weight:700;">📋 Withdrawal History</div>
+    <div style="font-size:13px; color:var(--muted);">{{ total }} total</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Amount</th>
+          <th>Phone</th>
+          <th>Network</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in page_obj %}
+        <tr>
+          <td><strong>UGX {{ w.amount|floatformat:0 }}</strong></td>
+          <td>{{ w.payout_phone }}</td>
+          <td>{{ w.payout_network }}</td>
+          <td>
+            {% if w.status == "PAID" %}<span class="badge badge-green">Paid</span>
+            {% elif w.status == "PENDING" %}<span class="badge badge-orange">Pending</span>
+            {% else %}<span class="badge badge-red">Failed</span>{% endif %}
+          </td>
+          <td style="color:var(--muted);">{{ w.created_at|date:"M d, Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No withdrawals yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:20px; flex-wrap:wrap; gap:10px;">
+    <div style="font-size:13px; color:var(--muted);">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div style="display:flex; gap:6px;">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">‹ Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Next ›</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

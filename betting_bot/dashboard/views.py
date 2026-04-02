@@ -421,6 +421,104 @@ def manual_send_predictions(request):
 
 
 @owner_required
+def wallet(request):
+    from payments.models import OwnerWallet, WithdrawalRequest, RevenueConfig
+    from django.core.paginator import Paginator
+    wallet = OwnerWallet.get()
+    config = RevenueConfig.get()
+    withdrawals = WithdrawalRequest.objects.order_by("-created_at")
+    paginator = Paginator(withdrawals, 20)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(request, "dashboard/wallet.html", {
+        "wallet": wallet,
+        "config": config,
+        "page_obj": page,
+        "total": withdrawals.count(),
+    })
+
+
+@owner_required
+def wallet_withdraw(request):
+    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider
+    from payments.livepay_client import LivePayClient, normalize_phone, detect_network
+    from decimal import Decimal
+    import uuid
+
+    if request.method != "POST":
+        return redirect("dashboard:wallet")
+
+    phone = request.POST.get("phone", "").strip()
+    amount_str = request.POST.get("amount", "").strip()
+
+    if not phone or not amount_str:
+        messages.error(request, "Phone and amount are required.")
+        return redirect("dashboard:wallet")
+
+    try:
+        amount = Decimal(amount_str)
+        if amount < 500:
+            raise ValueError("Minimum withdrawal is UGX 500.")
+    except Exception as e:
+        messages.error(request, f"Invalid amount: {e}")
+        return redirect("dashboard:wallet")
+
+    wallet = OwnerWallet.get()
+    if amount > wallet.balance:
+        messages.error(request, f"Insufficient balance. Available: UGX {wallet.balance:,.0f}")
+        return redirect("dashboard:wallet")
+
+    provider = LivePayProvider.objects.filter(is_active=True).first()
+    if not provider:
+        messages.error(request, "No active LivePay provider configured.")
+        return redirect("dashboard:wallet")
+
+    phone_normalized = normalize_phone(phone)
+    reference = uuid.uuid4().hex
+
+    withdrawal = WithdrawalRequest.objects.create(
+        amount=amount,
+        payout_phone=phone_normalized,
+        payout_network=detect_network(phone_normalized),
+        status=WithdrawalRequest.STATUS_PENDING,
+    )
+
+    try:
+        client = LivePayClient(
+            secret_key=provider.secret_key,
+            public_key=provider.public_key,
+            pin=provider.transaction_pin,
+        )
+        result = client.send(
+            phone=phone_normalized,
+            amount=int(amount),
+            reference=reference,
+        )
+
+        if result.get("status") == "success":
+            # Deduct from wallet
+            from django.db import transaction as db_tx
+            with db_tx.atomic():
+                w = OwnerWallet.objects.select_for_update().get(pk=1)
+                w.balance -= amount
+                w.save(update_fields=["balance", "updated_at"])
+            withdrawal.status = WithdrawalRequest.STATUS_PAID
+            withdrawal.save(update_fields=["status", "updated_at"])
+            messages.success(request, f"✅ UGX {amount:,.0f} sent to {phone_normalized} successfully.")
+        else:
+            withdrawal.status = WithdrawalRequest.STATUS_FAILED
+            withdrawal.failure_reason = result.get("message", "Unknown error")
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+            messages.error(request, f"❌ Withdrawal failed: {result.get('message', 'Unknown error')}")
+    except Exception as e:
+        withdrawal.status = WithdrawalRequest.STATUS_FAILED
+        withdrawal.failure_reason = str(e)
+        withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+        messages.error(request, f"❌ Error: {e}")
+
+    return redirect("dashboard:wallet")
+
+
+@owner_required
 def sms_log(request):
     from payments.models import SMSLog
     from django.core.paginator import Paginator
