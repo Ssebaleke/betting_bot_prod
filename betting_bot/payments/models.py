@@ -249,8 +249,39 @@ class RevenueConfig(models.Model):
         super().save(*args, **kwargs)
 
 
+class PlatformWallet(models.Model):
+    """Singleton — tracks super admin/platform revenue (the commission cut)."""
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform Wallet (Super Admin)"
+
+    def __str__(self):
+        return f"Platform Wallet — UGX {self.balance}"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def credit(cls, amount):
+        from django.db import transaction as db_tx
+        with db_tx.atomic():
+            wallet = cls.objects.select_for_update().get_or_create(pk=1)[0]
+            wallet.balance += Decimal(str(amount))
+            wallet.total_earned += Decimal(str(amount))
+            wallet.save(update_fields=["balance", "total_earned", "updated_at"])
+
+
 class OwnerWallet(models.Model):
-    """Singleton — tracks accumulated platform revenue."""
+    """Singleton — tracks owner earnings (payment amount minus platform commission)."""
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total_earned = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     updated_at = models.DateTimeField(auto_now=True)

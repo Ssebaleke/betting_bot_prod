@@ -422,15 +422,17 @@ def manual_send_predictions(request):
 
 @owner_required
 def wallet(request):
-    from payments.models import OwnerWallet, WithdrawalRequest, RevenueConfig
+    from payments.models import OwnerWallet, PlatformWallet, WithdrawalRequest, RevenueConfig
     from django.core.paginator import Paginator
-    wallet = OwnerWallet.get()
+    owner_wallet = OwnerWallet.get()
+    platform_wallet = PlatformWallet.get()
     config = RevenueConfig.get()
     withdrawals = WithdrawalRequest.objects.order_by("-created_at")
     paginator = Paginator(withdrawals, 20)
     page = paginator.get_page(request.GET.get("page"))
     return render(request, "dashboard/wallet.html", {
-        "wallet": wallet,
+        "owner_wallet": owner_wallet,
+        "platform_wallet": platform_wallet,
         "config": config,
         "page_obj": page,
         "total": withdrawals.count(),

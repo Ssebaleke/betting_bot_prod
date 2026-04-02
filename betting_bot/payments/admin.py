@@ -15,6 +15,7 @@ from .models import (
     Payment,
     LivePayProvider,
     RevenueConfig,
+    PlatformWallet,
     OwnerWallet,
     WithdrawalRequest,
 )
@@ -200,8 +201,9 @@ class PaymentAdmin(admin.ModelAdmin):
             .annotate(total=Sum("amount"), count=Count("id"))
             .order_by("day")
         )
-        from payments.models import OwnerWallet, RevenueConfig
-        wallet = OwnerWallet.get()
+        from payments.models import PlatformWallet, OwnerWallet, RevenueConfig
+        platform_wallet = PlatformWallet.get()
+        owner_wallet = OwnerWallet.get()
         config = RevenueConfig.get()
         sms_qs = SMSTopUp.objects.filter(status=SMSTopUp.STATUS_SUCCESS)
         context = {
@@ -218,8 +220,10 @@ class PaymentAdmin(admin.ModelAdmin):
             "new_this_month": new_this_month,
             "per_package": per_package,
             "daily": daily,
-            "commission_balance": wallet.balance,
-            "commission_total_earned": wallet.total_earned,
+            "platform_balance": platform_wallet.balance,
+            "platform_total_earned": platform_wallet.total_earned,
+            "owner_balance": owner_wallet.balance,
+            "owner_total_earned": owner_wallet.total_earned,
             "commission_percentage": config.percentage,
             "sms_total": sms_qs.aggregate(t=Sum("amount_paid"))["t"] or 0,
             "sms_today": sms_qs.filter(created_at__date=today).aggregate(t=Sum("amount_paid"))["t"] or 0,
@@ -270,6 +274,18 @@ class RevenueConfigAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not RevenueConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PlatformWallet)
+class PlatformWalletAdmin(admin.ModelAdmin):
+    list_display = ("balance", "total_earned", "updated_at")
+    readonly_fields = ("balance", "total_earned", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False

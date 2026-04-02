@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 
 from packages.models import Package
-from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider, LivePayProvider, RevenueConfig, OwnerWallet
+from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider, LivePayProvider, RevenueConfig, OwnerWallet, PlatformWallet
 from .makypay import MakyPayClient, normalize_ug_phone
 from .yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
 from .live_client import LivePayClient
@@ -273,12 +273,20 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     try:
         config = RevenueConfig.get()
         if config.percentage > 0:
-            revenue = (payment.amount * config.percentage / Decimal("100")).quantize(Decimal("1"))
-            if revenue > 0:
-                OwnerWallet.credit(revenue)
-                logger.info("Revenue credited UGX %s for ref=%s", revenue, reference)
+            platform_cut = (payment.amount * config.percentage / Decimal("100")).quantize(Decimal("1"))
+            owner_share = payment.amount - platform_cut
+        else:
+            platform_cut = Decimal("0")
+            owner_share = payment.amount
+
+        if platform_cut > 0:
+            PlatformWallet.credit(platform_cut)
+            logger.info("Platform cut UGX %s (%.0f%%) for ref=%s", platform_cut, config.percentage, reference)
+
+        OwnerWallet.credit(owner_share)
+        logger.info("Owner credited UGX %s for ref=%s", owner_share, reference)
     except Exception as e:
-        logger.error("Revenue credit failed for ref=%s: %s", reference, e)
+        logger.error("Wallet split failed for ref=%s: %s", reference, e)
 
     from subscription.services import create_subscription
     subscription = create_subscription(user=payment.user, package=payment.package)
