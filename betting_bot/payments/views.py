@@ -214,6 +214,11 @@ def yoo_ipn(request):
             confirm_payment(reference=payment.reference, external_reference=network_ref)
         try:
             payment.refresh_from_db()
+            from .services import _post_payment_notifications
+            from subscription.models import Subscription
+            sub = Subscription.objects.filter(user=payment.user, is_active=True).order_by("-created_at").first()
+            if sub:
+                _post_payment_notifications(payment.id, sub.id)
             if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
                 from bots.notifications import notify_payment_success
                 notify_payment_success(payment.user, payment.package, payment)
@@ -311,7 +316,12 @@ def payment_status(request, reference):
                 status_val = str(result.get("status", "")).lower()
                 txn_status = str(result.get("data", {}).get("status", "")).lower()
                 if status_val == "success" and txn_status in ("approved", "success", "completed"):
-                    confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
+                    confirmed = confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
+                    from .services import _post_payment_notifications
+                    from subscription.models import Subscription
+                    sub = Subscription.objects.filter(user=confirmed.user, is_active=True).order_by("-created_at").first()
+                    if sub:
+                        _post_payment_notifications(confirmed.id, sub.id)
                     payment.refresh_from_db()
                 elif txn_status in ("failed", "cancelled"):
                     payment.status = Payment.STATUS_FAILED
@@ -331,7 +341,12 @@ def payment_status(request, reference):
                 logger.warning("YOO STATUS POLL ref=%s result=%s", reference, result)
                 yoo_status = result.get("yoo_status", "")
                 if yoo_status == "SUCCESS":
-                    confirm_payment(reference=payment.reference, external_reference=result.get("transaction_reference"))
+                    confirmed = confirm_payment(reference=payment.reference, external_reference=result.get("transaction_reference"))
+                    from .services import _post_payment_notifications
+                    from subscription.models import Subscription
+                    sub = Subscription.objects.filter(user=confirmed.user, is_active=True).order_by("-created_at").first()
+                    if sub:
+                        _post_payment_notifications(confirmed.id, sub.id)
                     payment.refresh_from_db()
                 elif yoo_status == "FAILED":
                     payment.status = Payment.STATUS_FAILED
@@ -465,6 +480,11 @@ def live_ipn(request):
             logger.warning("LIVEPAY IPN: payment confirmed ref=%s", reference_id)
             try:
                 payment.refresh_from_db()
+                from .services import _post_payment_notifications
+                from subscription.models import Subscription
+                sub = Subscription.objects.filter(user=payment.user, is_active=True).order_by("-created_at").first()
+                if sub:
+                    _post_payment_notifications(payment.id, sub.id)
                 if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
                     from bots.notifications import notify_payment_success
                     notify_payment_success(payment.user, payment.package, payment)

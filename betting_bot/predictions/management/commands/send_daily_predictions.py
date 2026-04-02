@@ -80,14 +80,17 @@ class Command(BaseCommand):
                 pkg_name = subscription.package.name
 
                 # Skip if already delivered to this user today for this package
-                already_delivered = PredictionDelivery.objects.filter(
-                    user=subscription.user,
-                    send_date=target_date,
-                    package=subscription.package,
-                ).exists()
-                if already_delivered:
-                    self.stdout.write(f"  Skipping {subscription.user.username} — already delivered today")
-                    continue
+                try:
+                    already_delivered = PredictionDelivery.objects.filter(
+                        user=subscription.user,
+                        send_date=target_date,
+                        package=subscription.package,
+                    ).exists()
+                    if already_delivered:
+                        self.stdout.write(f"  Skipping {subscription.user.username} — already delivered today")
+                        continue
+                except Exception:
+                    pass  # table may not exist yet, continue sending
 
                 package_total[pkg_name] = package_total.get(pkg_name, 0) + 1
 
@@ -117,11 +120,14 @@ class Command(BaseCommand):
                 if success:
                     sent_count += 1
                     package_sent[pkg_name] = package_sent.get(pkg_name, 0) + 1
-                    PredictionDelivery.objects.get_or_create(
-                        user=subscription.user,
-                        send_date=target_date,
-                        package=subscription.package,
-                    )
+                    try:
+                        PredictionDelivery.objects.get_or_create(
+                            user=subscription.user,
+                            send_date=target_date,
+                            package=subscription.package,
+                        )
+                    except Exception as e:
+                        logger.warning("PredictionDelivery record failed for %s: %s", subscription.user.username, e)
                     self.stdout.write(self.style.SUCCESS(
                         f"✓ Sent to {subscription.user.username} ({pkg_name})"
                     ))
