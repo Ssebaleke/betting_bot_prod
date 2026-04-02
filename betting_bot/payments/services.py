@@ -284,10 +284,6 @@ def confirm_payment(reference: str, external_reference: str | None = None) -> Pa
     subscription = create_subscription(user=payment.user, package=payment.package)
     logger.info("Subscription created for user=%s package=%s", payment.user.id, payment.package.name)
 
-    # Schedule post-commit actions (SMS + predictions) so they don't rollback the transaction
-    from django.db import transaction as db_tx
-    db_tx.on_commit(lambda: _post_payment_notifications(payment.id, subscription.id))
-
     return payment
 
 
