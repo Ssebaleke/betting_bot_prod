@@ -27,13 +27,11 @@
     <div class="stat-sub">Today only</div>
   </div>
   <div class="stat-card" style="background:linear-gradient(135deg,#1565c0,#6a1b9a);">
-    <div class="stat-label">💳 Wallet Balance</div>
+    <div class="stat-label">💳 My Wallet</div>
     <div class="stat-value">UGX {{ wallet.balance|floatformat:0 }}</div>
-    <div class="stat-sub" style="margin-bottom:10px;">Earned: UGX {{ wallet.total_earned|floatformat:0 }}</div>
-    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-      <a href="{% url 'dashboard:owner_wallet' %}" style="background:#00c853; color:#000; font-weight:700; font-size:11px; padding:5px 10px; border-radius:6px; text-decoration:none;">💰 Withdraw</a>
-      <button onclick="resetWallet()" style="background:rgba(255,255,255,.2); color:#fff; font-weight:700; font-size:11px; padding:5px 10px; border-radius:6px; border:none; cursor:pointer;">🔄 Reset</button>
-    </div>
+    <div class="stat-sub" style="margin-bottom:8px;">Total earned: UGX {{ wallet.total_earned|floatformat:0 }}</div>
+    <div style="font-size:10px; opacity:.8; margin-bottom:8px;">{{ commission_rate }}% commission deducted per payment</div>
+    <a href="{% url 'dashboard:wallet' %}" style="background:#00c853; color:#000; font-weight:700; font-size:11px; padding:5px 10px; border-radius:6px; text-decoration:none; display:inline-block;">💸 Withdraw</a>
   </div>
 </div>
 
@@ -157,15 +155,6 @@
     }
   });
 
-  function resetWallet() {
-    if (!confirm('Reset wallet balance to 0? This cannot be undone. Total earned will be preserved.')) return;
-    fetch("{% url 'dashboard:wallet_reset' %}", {
-      method: 'POST',
-      headers: {'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json'}
-    })
-    .then(r => r.json())
-    .then(d => { if (d.success) location.reload(); else alert(d.error); })
-    .catch(() => alert('Request failed'));
-  }
+  function resetWallet() {}
 </script>
 {% endblock %}

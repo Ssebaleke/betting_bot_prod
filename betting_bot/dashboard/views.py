@@ -86,8 +86,9 @@ def home(request):
     predictions_today = Prediction.objects.filter(send_date=today, is_active=True).count()
     predictions_pending = Prediction.objects.filter(send_date__gte=today, is_sent=False, is_active=True).count()
 
-    from payments.models import OwnerWallet
+    from payments.models import OwnerWallet, RevenueConfig
     wallet = OwnerWallet.get()
+    config = RevenueConfig.get()
 
     context = {
         "total_revenue": total_revenue,
@@ -107,6 +108,7 @@ def home(request):
         "predictions_today": predictions_today,
         "predictions_pending": predictions_pending,
         "wallet": wallet,
+        "commission_rate": config.percentage,
     }
     return render(request, "dashboard/home.html", context)
 
