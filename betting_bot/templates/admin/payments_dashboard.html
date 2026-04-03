@@ -31,12 +31,20 @@
   <h3>💹 Commission Earnings <span class="earn-badge">{{ commission_percentage }}% per transaction</span></h3>
   <div class="dash-grid">
     <div class="dash-card purple">
-      <div class="value">UGX {{ commission_total_earned|floatformat:0 }}</div>
+      <div class="value">UGX {{ platform_total_earned|floatformat:0 }}</div>
       <div class="label">Total Commission Earned</div>
     </div>
     <div class="dash-card purple">
-      <div class="value">UGX {{ commission_balance|floatformat:0 }}</div>
+      <div class="value">UGX {{ platform_balance|floatformat:0 }}</div>
       <div class="label">Available Balance</div>
+    </div>
+    <div class="dash-card green">
+      <div class="value">UGX {{ owner_total_earned|floatformat:0 }}</div>
+      <div class="label">Owner Total Earned</div>
+    </div>
+    <div class="dash-card green">
+      <div class="value">UGX {{ owner_balance|floatformat:0 }}</div>
+      <div class="label">Owner Available Balance</div>
     </div>
   </div>
 
