@@ -515,7 +515,7 @@
 
   function startPolling() {
     let attempts = 0;
-    const MAX = 24; // 2 minutes (24 x 5s)
+    const MAX = 60; // 5 minutes (60 x 5s) — Airtel takes longer
     pollTimer = setInterval(() => {
       attempts++;
       fetch("/pay/status/" + currentReference + "/")
@@ -531,8 +531,10 @@
             showPanel(5);
           } else if (attempts >= MAX) {
             clearInterval(pollTimer);
-            document.getElementById("failedMsg").textContent = "Payment timed out. If you approved it, your subscription will activate shortly.";
-            showPanel(5);
+            // Don't show failed — Airtel may still confirm via webhook
+            document.getElementById("successPhone").innerHTML =
+              '+256' + currentPhone +
+              '<br><small style="color:var(--muted);font-size:12px;font-weight:400;">If you approved the payment, your subscription will activate within a few minutes and you will receive an SMS confirmation.</small>';
           }
         })
         .catch(() => { if (attempts >= MAX) clearInterval(pollTimer); });
