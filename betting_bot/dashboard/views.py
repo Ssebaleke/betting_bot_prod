@@ -554,11 +554,9 @@ def sms_credits(request):
 
 @owner_required
 def sms_topup_pay(request):
-    import json, uuid
+    import json
     from decimal import Decimal
-    from payments.models import SMSBalance, SMSTopUp, YooPaymentProvider
-    from payments.yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
-    from payments.makypay import normalize_ug_phone
+    from payments.models import SMSBalance, SMSTopUp, YooPaymentProvider, LivePayProvider
 
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "POST only"}, status=405)
@@ -583,35 +581,50 @@ def sms_topup_pay(request):
     if credits_to_add < 1:
         return JsonResponse({"success": False, "error": f"Minimum amount is UGX {int(balance.price_per_sms):,} for 1 credit."}, status=400)
 
-    reference = make_reference()
+    # Use LivePay if active, else fall back to Yoo
+    live_provider = LivePayProvider.objects.filter(is_active=True).first()
+    yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
-    topup = SMSTopUp.objects.create(
-        phone=phone,
-        amount_paid=amount,
-        credits_added=credits_to_add,
-        payment_reference=reference,
-        status=SMSTopUp.STATUS_PENDING,
-    )
+    if not live_provider and not yoo_provider:
+        return JsonResponse({"success": False, "error": "No payment provider configured."}, status=400)
 
     try:
-        provider = YooPaymentProvider.objects.filter(is_active=True).first()
-        if not provider:
-            topup.delete()
-            return JsonResponse({"success": False, "error": "No payment provider configured."}, status=400)
-
-        client = YooClient(api_username=provider.api_username, api_password=provider.api_password)
-        result = client.collect(
-            phone=normalize_yoo_phone(phone),
-            amount=int(amount),
-            reference=reference,
-            notification_url=provider.notification_url,
-            failure_url=provider.failure_url,
-        )
-
-        if result.get("yoo_status") == "FAILED":
-            topup.status = SMSTopUp.STATUS_FAILED
-            topup.save(update_fields=["status"])
-            return JsonResponse({"success": False, "error": result.get("error_message") or "Payment rejected."}, status=400)
+        if live_provider:
+            from payments.livepay_client import LivePayClient, normalize_phone, make_reference
+            reference = make_reference()
+            topup = SMSTopUp.objects.create(
+                phone=phone, amount_paid=amount, credits_added=credits_to_add,
+                payment_reference=reference, status=SMSTopUp.STATUS_PENDING,
+            )
+            client = LivePayClient(
+                secret_key=live_provider.secret_key,
+                public_key=live_provider.public_key,
+            )
+            result = client.collect(
+                phone=normalize_phone(phone),
+                amount=int(amount),
+                reference=reference,
+            )
+            if result.get("status") == "error":
+                topup.status = SMSTopUp.STATUS_FAILED
+                topup.save(update_fields=["status"])
+                return JsonResponse({"success": False, "error": result.get("message", "Payment rejected.")}, status=400)
+        else:
+            from payments.yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
+            reference = make_reference()
+            topup = SMSTopUp.objects.create(
+                phone=phone, amount_paid=amount, credits_added=credits_to_add,
+                payment_reference=reference, status=SMSTopUp.STATUS_PENDING,
+            )
+            client = YooClient(api_username=yoo_provider.api_username, api_password=yoo_provider.api_password)
+            result = client.collect(
+                phone=normalize_yoo_phone(phone), amount=int(amount), reference=reference,
+                notification_url=yoo_provider.notification_url, failure_url=yoo_provider.failure_url,
+            )
+            if result.get("yoo_status") == "FAILED":
+                topup.status = SMSTopUp.STATUS_FAILED
+                topup.save(update_fields=["status"])
+                return JsonResponse({"success": False, "error": result.get("error_message", "Payment rejected.")}, status=400)
 
     except Exception as e:
         topup.status = SMSTopUp.STATUS_FAILED

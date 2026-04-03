@@ -471,6 +471,19 @@ def live_ipn(request):
 
     if is_success:
         try:
+            # Check if this is an SMS top-up first
+            from payments.models import SMSTopUp, SMSBalance
+            topup = SMSTopUp.objects.filter(payment_reference=reference_id).first()
+            if topup:
+                if topup.status != SMSTopUp.STATUS_SUCCESS:
+                    topup.status = SMSTopUp.STATUS_SUCCESS
+                    topup.save(update_fields=["status"])
+                    bal = SMSBalance.get()
+                    bal.credits += topup.credits_added
+                    bal.save(update_fields=["credits", "updated_at"])
+                    logger.info("LIVEPAY IPN: SMS topup confirmed ref=%s credits=%s", reference_id, topup.credits_added)
+                return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
+
             payment = Payment.objects.filter(reference=reference_id).first()
             if not payment:
                 logger.warning("LIVEPAY IPN: no payment found for reference_id=%s", reference_id)
@@ -496,6 +509,14 @@ def live_ipn(request):
 
     elif is_failed:
         try:
+            from payments.models import SMSTopUp
+            topup = SMSTopUp.objects.filter(payment_reference=reference_id).first()
+            if topup:
+                if topup.status == SMSTopUp.STATUS_PENDING:
+                    topup.status = SMSTopUp.STATUS_FAILED
+                    topup.save(update_fields=["status"])
+                return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
+
             payment = Payment.objects.filter(reference=reference_id).first()
             if payment and payment.status == Payment.STATUS_PENDING:
                 payment.status = Payment.STATUS_FAILED
