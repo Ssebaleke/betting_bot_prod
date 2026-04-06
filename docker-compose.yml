@@ -45,12 +45,7 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-scheduler
-    command: >-
-      sh -c "printenv | grep -v '^_' > /etc/environment &&
-      echo '*/5 * * * * root . /etc/environment && cd /app/betting_bot && python manage.py send_daily_predictions >> /var/log/predictions.log 2>&1' > /etc/cron.d/predictions &&
-      echo '0 * * * * root . /etc/environment && cd /app/betting_bot && python manage.py check_subscriptions >> /var/log/subscriptions.log 2>&1' > /etc/cron.d/subscriptions &&
-      chmod 0644 /etc/cron.d/predictions /etc/cron.d/subscriptions &&
-      cron -f"
+    command: bash /app/betting_bot/Docker/scheduler_entrypoint.sh
     env_file:
       - .env
     environment:
