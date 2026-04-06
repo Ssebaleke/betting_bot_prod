@@ -45,7 +45,7 @@ services:
       context: .
       dockerfile: betting_bot/Docker/Dockerfile
     container_name: bet-bot-scheduler
-    command: bash /app/betting_bot/Docker/scheduler_entrypoint.sh
+    command: python /app/betting_bot/Docker/scheduler.py
     env_file:
       - .env
     environment:
