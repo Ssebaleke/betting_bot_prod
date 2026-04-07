@@ -171,9 +171,20 @@ def package_toggle(request, pk):
 
 @owner_required
 def predictions(request):
+    from subscription.models import Subscription
+    from django.utils import timezone
     preds = Prediction.objects.select_related("package").order_by("-send_date", "match_time")
     packages_list = Package.objects.filter(is_active=True)
-    return render(request, "dashboard/predictions.html", {"predictions": preds, "packages": packages_list})
+    # Build a set of package IDs that have active subscribers
+    active_package_ids = set(
+        Subscription.objects.filter(is_active=True, end_date__gt=timezone.now())
+        .values_list("package_id", flat=True).distinct()
+    )
+    return render(request, "dashboard/predictions.html", {
+        "predictions": preds,
+        "packages": packages_list,
+        "active_package_ids": active_package_ids,
+    })
 
 
 @owner_required
