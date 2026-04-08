@@ -37,11 +37,11 @@ jobs:
             sleep 15
 
             echo "📦 Running migrations..."
-            docker exec bet-bot-web python manage.py migrate --fake predictions 0003_predictiondelivery --noinput || true
-            docker exec bet-bot-web python manage.py migrate --noinput
+            docker-compose exec -T web python manage.py migrate --fake predictions 0003_predictiondelivery --noinput || true
+            docker-compose exec -T web python manage.py migrate --noinput
 
             echo "🗂️ Collecting static files..."
-            docker exec bet-bot-web python manage.py collectstatic --noinput
+            docker-compose exec -T web python manage.py collectstatic --noinput
 
             echo "✅ Deployment complete!"
             docker-compose ps
