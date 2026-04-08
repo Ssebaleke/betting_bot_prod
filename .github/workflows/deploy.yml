@@ -28,25 +28,25 @@ jobs:
             git reset --hard origin/main
 
             echo "🔨 Rebuilding containers..."
-            docker-compose build
+            docker compose build
 
             echo "🔄 Restarting containers..."
-            docker-compose up -d
+            docker compose up -d
 
             echo "⏳ Waiting for web container..."
             sleep 15
 
             echo "🧹 One-time: reset predictions tables..."
-            docker-compose exec -T db psql -U betbot -d betbot -c "DROP TABLE IF EXISTS predictions_predictiondelivery CASCADE; DROP TABLE IF EXISTS predictions_prediction CASCADE; DELETE FROM django_migrations WHERE app = 'predictions';" || true
+            docker compose exec -T db psql -U betbot -d betbot -c "DROP TABLE IF EXISTS predictions_predictiondelivery CASCADE; DROP TABLE IF EXISTS predictions_prediction CASCADE; DELETE FROM django_migrations WHERE app = 'predictions';" || true
 
             echo "📦 Running migrations..."
-            docker-compose exec -T web python manage.py migrate --noinput
+            docker compose exec -T web python manage.py migrate --noinput
 
             echo "🗂️ Collecting static files..."
-            docker-compose exec -T web python manage.py collectstatic --noinput
+            docker compose exec -T web python manage.py collectstatic --noinput
 
             echo "✅ Deployment complete!"
-            docker-compose ps
+            docker compose ps
           EOF
 
 
