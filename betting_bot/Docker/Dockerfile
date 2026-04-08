@@ -7,7 +7,8 @@ WORKDIR /app/betting_bot
 
 # system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
+    build-essential \
+    libpq-dev \
     cron \
   && rm -rf /var/lib/apt/lists/*
 
