@@ -27,12 +27,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "⚙️ Installing docker compose V2..."
-            DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
-            mkdir -p $DOCKER_CONFIG/cli-plugins
-            curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose
-            chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
-
             echo "🔨 Rebuilding containers..."
             docker compose build
 
