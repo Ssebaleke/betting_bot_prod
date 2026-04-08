@@ -19,7 +19,7 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh -i ~/.ssh/github_actions ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -i ~/.ssh/github_actions ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'bash -s' << 'EOF'
             set -e
             cd ~/betting_bot_prod
 
@@ -28,7 +28,7 @@ jobs:
             git reset --hard origin/main
 
             echo "🔨 Rebuilding containers..."
-            docker-compose build --no-cache
+            docker-compose build
 
             echo "🔄 Restarting containers..."
             docker-compose up -d
