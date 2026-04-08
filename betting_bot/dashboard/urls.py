@@ -20,6 +20,7 @@ urlpatterns = [
     path("predictions/create/", views.prediction_create, name="prediction_create"),
     path("predictions/<int:pk>/edit/", views.prediction_edit, name="prediction_edit"),
     path("predictions/<int:pk>/delete/", views.prediction_delete, name="prediction_delete"),
+    path("predictions/send-now/", views.prediction_send_now, name="prediction_send_now"),
 
     # Subscribers & Payments
     path("subscribers/", views.subscribers, name="subscribers"),

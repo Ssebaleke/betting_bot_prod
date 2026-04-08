@@ -6,7 +6,17 @@
 {% block content %}
 <div class="page-header">
   <h1>🎯 Predictions</h1>
-  <a href="{% url 'dashboard:prediction_create' %}" class="btn btn-green">+ Add Prediction</a>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <form method="post" action="{% url 'dashboard:prediction_send_now' %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline"
+        onclick="return confirm('Send all pending predictions for today now?')"
+        style="border-color:var(--warning); color:var(--warning);">
+        ⚡ Send Now
+      </button>
+    </form>
+    <a href="{% url 'dashboard:prediction_create' %}" class="btn btn-green">+ Add Prediction</a>
+  </div>
 </div>
 
 <div class="card">

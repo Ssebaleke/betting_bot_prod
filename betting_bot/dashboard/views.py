@@ -235,6 +235,32 @@ def prediction_edit(request, pk):
 
 
 @owner_required
+def prediction_send_now(request):
+    """Manually trigger send_daily_predictions for today."""
+    if request.method != "POST":
+        return redirect("dashboard:predictions")
+
+    import subprocess
+    import sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "/app/betting_bot/manage.py", "send_daily_predictions"],
+            capture_output=True, text=True, timeout=120
+        )
+        output = result.stdout + result.stderr
+        if "Sent:" in output or "No unsent" in output:
+            messages.success(request, f"✅ Send triggered. {output.splitlines()[-1] if output else 'Done.'}")
+        else:
+            messages.warning(request, f"⚠️ Completed with output: {output[:300]}")
+    except subprocess.TimeoutExpired:
+        messages.warning(request, "⏳ Send is taking longer than expected — running in background.")
+    except Exception as e:
+        messages.error(request, f"❌ Error: {e}")
+
+    return redirect("dashboard:predictions")
+
+
+@owner_required
 def prediction_delete(request, pk):
     pred = get_object_or_404(Prediction, pk=pk)
     if request.method == "POST":
@@ -703,11 +729,6 @@ def owner_withdraw(request):
         return JsonResponse({"success": False, "error": "Minimum withdrawal is UGX 10,000"}, status=400)
 
     wallet = OwnerWallet.get()
-    fee = provider.withdrawal_fee or Decimal("0")
-    total_deducted = amount + fee
-
-    if total_deducted > wallet.balance:
-        return JsonResponse({"success": False, "error": f"Insufficient wallet balance. Need UGX {int(total_deducted):,} (amount + UGX {int(fee):,} fee)"}, status=400)
 
     provider = LivePayProvider.objects.filter(is_active=True).first()
     if not provider:
@@ -716,12 +737,21 @@ def owner_withdraw(request):
     if not provider.transaction_pin:
         return JsonResponse({"success": False, "error": "LivePay transaction PIN not configured"}, status=400)
 
+    fee = provider.withdrawal_fee or Decimal("0")
+    amount_to_send = amount - fee  # deduct fee from amount
+
+    if amount_to_send <= 0:
+        return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
+
+    if amount > wallet.balance:
+        return JsonResponse({"success": False, "error": f"Insufficient wallet balance. Available: UGX {int(wallet.balance):,}"}, status=400)
+
     import uuid as _uuid
     ref = str(_uuid.uuid4()).replace("-", "")
 
     client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
     result = client.send(
-        amount=int(amount),
+        amount=int(amount_to_send),
         phone=phone,
         network=network,
         pin=provider.transaction_pin,
@@ -739,13 +769,12 @@ def owner_withdraw(request):
         )
         return JsonResponse({"success": False, "error": error_msg}, status=400)
 
-    # Deduct wallet and record withdrawal
     from django.db import transaction as db_tx
     with db_tx.atomic():
         locked = OwnerWallet.objects.select_for_update().get(pk=1)
-        if total_deducted > locked.balance:
+        if amount > locked.balance:
             return JsonResponse({"success": False, "error": "Insufficient balance"}, status=400)
-        locked.balance -= total_deducted
+        locked.balance -= amount  # deduct full amount (including fee)
         locked.save(update_fields=["balance", "updated_at"])
 
         WithdrawalRequest.objects.create(
@@ -755,4 +784,4 @@ def owner_withdraw(request):
             status=WithdrawalRequest.STATUS_PAID,
         )
 
-    return JsonResponse({"success": True, "message": f"UGX {int(amount):,} sent to {phone}. Fee: UGX {int(fee):,}"})
+    return JsonResponse({"success": True, "message": f"UGX {int(amount_to_send):,} sent to {phone}. Fee deducted: UGX {int(fee):,}"})
