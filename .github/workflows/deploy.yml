@@ -36,10 +36,8 @@ jobs:
             echo "⏳ Waiting for web container..."
             sleep 15
 
-            echo "🧹 One-time: reset predictions tables..."
-            docker-compose exec -T db psql -U betbot -d betbot -c "DROP TABLE IF EXISTS predictions_predictiondelivery CASCADE; DROP TABLE IF EXISTS predictions_prediction CASCADE; DELETE FROM django_migrations WHERE app = 'predictions';" || true
-
             echo "📦 Running migrations..."
+            docker-compose exec -T web python manage.py migrate --fake predictions 0003_predictiondelivery --noinput || true
             docker-compose exec -T web python manage.py migrate --noinput
 
             echo "🗂️ Collecting static files..."
