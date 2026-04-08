@@ -27,6 +27,9 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            echo "🧹 Freeing disk space..."
+            docker system prune -af --volumes || true
+
             echo "🔨 Rebuilding containers..."
             docker-compose build
 
