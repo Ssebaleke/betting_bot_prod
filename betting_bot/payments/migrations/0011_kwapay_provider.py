@@ -5,7 +5,7 @@ from decimal import Decimal
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payments', '0009_livepay_withdrawal_fee'),
+        ('payments', '0010_platformwallet'),
     ]
 
     operations = [
