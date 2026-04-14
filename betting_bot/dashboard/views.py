@@ -535,7 +535,7 @@ def wallet_withdraw(request):
             reference=reference,
         )
 
-        if result.get("status") == "success":
+        if result.get("success"):
             # Deduct from wallet
             from django.db import transaction as db_tx
             with db_tx.atomic():
@@ -753,12 +753,10 @@ def owner_withdraw(request):
     result = client.send(
         amount=int(amount_to_send),
         phone=phone,
-        network=network,
-        pin=provider.transaction_pin,
         reference=ref,
     )
 
-    if result.get("status") != "success":
+    if not result.get("success"):
         error_msg = result.get("message") or "Disbursement failed"
         WithdrawalRequest.objects.create(
             amount=amount,

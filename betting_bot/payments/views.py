@@ -336,20 +336,18 @@ def payment_status(request, reference):
             provider = LivePayProvider.objects.filter(is_active=True).first()
             if provider and payment.external_reference:
                 client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
-                result = client.check_status(payment.external_reference)
+                result = client.check_status(payment.reference)
                 logger.warning("LIVEPAY STATUS POLL ref=%s result=%s", reference, result)
                 status_val = str(result.get("status", "")).lower()
-                # LivePay status response: result["transaction"]["status"]
-                txn_status = str(result.get("transaction", {}).get("status", "")).lower()
-                if status_val == "success" and txn_status in ("approved", "success", "completed"):
-                    confirmed = confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
+                if not result.get("error") and status_val == "success":
+                    confirmed = confirm_payment(reference=payment.reference, external_reference=result.get("internal_reference"))
                     from .services import _post_payment_notifications
                     from subscription.models import Subscription
                     sub = Subscription.objects.filter(user=confirmed.user, is_active=True).order_by("-created_at").first()
                     if sub:
                         _post_payment_notifications(confirmed.id, sub.id)
                     payment.refresh_from_db()
-                elif txn_status in ("failed", "cancelled"):
+                elif status_val in ("failed", "cancelled"):
                     payment.status = Payment.STATUS_FAILED
                     payment.save(update_fields=["status"])
         except Exception as e:
@@ -483,15 +481,15 @@ def live_ipn(request):
             logger.warning("LIVEPAY IPN: signature mismatch — processing anyway for now")
 
     # Fields per LivePay docs
-    status = str(data.get("status", "")).strip()       # Approved / Failed / Pending / Cancelled
-    transaction_id = data.get("transaction_id", "")    # LivePay transaction ID
-    reference_id = data.get("reference_id", "")        # our original reference
+    status = str(data.get("status", "")).strip()       # Success / Failed
+    transaction_id = data.get("internal_reference", "")  # LivePay internal reference
+    reference_id = data.get("customer_reference", "")    # our original reference
 
     if not reference_id:
-        logger.warning("LIVEPAY IPN: no reference_id — ignoring")
+        logger.warning("LIVEPAY IPN: no customer_reference — ignoring")
         return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
 
-    is_success = status.lower() == "approved"
+    is_success = status.lower() == "success"
     is_failed = status.lower() in ("failed", "cancelled")
 
     if is_success:

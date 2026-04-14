@@ -7,8 +7,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-COLLECT_URL = "https://livepay.me/api/v1/collect-money"
-SEND_URL = "https://livepay.me/api/v1/send-money"
+COLLECT_URL = "https://livepay.me/api/collect-money"
+SEND_URL = "https://livepay.me/api/send-money"
 
 
 def normalize_phone(phone: str) -> str:
@@ -21,75 +21,73 @@ def normalize_phone(phone: str) -> str:
 
 
 def detect_network(phone: str) -> str:
-    """Detect MTN or AIRTEL from Uganda phone number."""
     phone = normalize_phone(phone)
-    number = phone[3:]  # strip 256
+    number = phone[3:]
     mtn_prefixes = ("77", "78", "76", "31", "39")
     airtel_prefixes = ("70", "75", "74", "20")
     if number[:2] in mtn_prefixes:
         return "MTN"
     if number[:2] in airtel_prefixes:
         return "AIRTEL"
-    return "MTN"  # default
+    return "MTN"
 
 
 def make_reference() -> str:
-    return uuid.uuid4().hex
+    return uuid.uuid4().hex[:30]
 
 
 class LivePayClient:
     TIMEOUT = 30
 
     def __init__(self, secret_key: str, public_key: str, pin: str = ""):
-        self.secret_key = secret_key
-        self.public_key = public_key
+        self.account_number = public_key   # public_key stores accountNumber
+        self.api_key = secret_key          # secret_key stores Bearer token
         self.pin = pin
 
     def _headers(self) -> dict:
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.secret_key}",
+            "Authorization": f"Bearer {self.api_key}",
         }
 
     def collect(self, phone: str, amount: int, reference: str) -> dict:
         phone = normalize_phone(phone)
-        network = detect_network(phone)
+        ref = reference[:30]
         payload = {
-            "apikey": self.public_key,
-            "reference": reference,
-            "phone_number": phone,
+            "accountNumber": self.account_number,
+            "phoneNumber": phone,
             "amount": amount,
             "currency": "UGX",
-            "network": network,
+            "reference": ref,
+            "description": "Subscription payment",
         }
         try:
             resp = requests.post(COLLECT_URL, json=payload, headers=self._headers(), timeout=self.TIMEOUT)
             data = resp.json()
-            logger.info("LivePay collect ref=%s status=%s", reference, data.get("status"))
+            logger.info("LivePay collect ref=%s response=%s", ref, data)
             return data
         except Exception as e:
-            logger.error("LivePay collect error ref=%s: %s", reference, e)
+            logger.error("LivePay collect error ref=%s: %s", ref, e)
             raise
 
-    def send(self, phone: str, amount: int, reference: str) -> dict:
+    def send(self, phone: str, amount: int, reference: str, description: str = "Payout") -> dict:
         phone = normalize_phone(phone)
-        network = detect_network(phone)
+        ref = reference[:30]
         payload = {
-            "apikey": self.public_key,
-            "reference": reference,
-            "phone_number": phone,
+            "accountNumber": self.account_number,
+            "phoneNumber": phone,
             "amount": amount,
             "currency": "UGX",
-            "network": network,
-            "pin": self.pin,
+            "reference": ref,
+            "description": description,
         }
         try:
             resp = requests.post(SEND_URL, json=payload, headers=self._headers(), timeout=self.TIMEOUT)
             data = resp.json()
-            logger.info("LivePay send ref=%s status=%s", reference, data.get("status"))
+            logger.info("LivePay send ref=%s response=%s", ref, data)
             return data
         except Exception as e:
-            logger.error("LivePay send error ref=%s: %s", reference, e)
+            logger.error("LivePay send error ref=%s: %s", ref, e)
             raise
 
 

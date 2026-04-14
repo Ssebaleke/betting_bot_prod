@@ -154,7 +154,8 @@ class LivePayProviderAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active", "created_at")
     list_editable = ("is_active",)
     fieldsets = (
-        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin", "withdrawal_fee")}),
+        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin", "withdrawal_fee"),
+                         "description": "public_key = Account Number (e.g. LP7025527774) | secret_key = API Key (Bearer token)"}),
         ("Status", {"fields": ("is_active",)}),
     )
 

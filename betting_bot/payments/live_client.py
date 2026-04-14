@@ -18,35 +18,38 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://livepay.me/api/v1"
+_BASE_URL = "https://livepay.me/api"
 _TIMEOUT = 15
 
 
 class LivePayClient:
 
     def __init__(self, public_key: str, secret_key: str):
-        self.public_key = (public_key or "").strip()
-        self.secret_key = (secret_key or "").strip()
-        if not self.public_key or not self.secret_key:
-            raise ValueError("LivePay public_key and secret_key must be set.")
+        self.account_number = (public_key or "").strip()  # public_key stores accountNumber
+        self.api_key = (secret_key or "").strip()         # secret_key stores apiKey (Bearer token)
+        if not self.account_number or not self.api_key:
+            raise ValueError("LivePay account_number and api_key must be set.")
 
-    def collect(self, amount: int, phone: str, network: str, reference: str = None) -> dict:
-        ref = reference or str(uuid.uuid4()).replace("-", "")
+    @property
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+
+    def collect(self, amount: int, phone: str, network: str = None, reference: str = None) -> dict:
+        ref = (reference or str(uuid.uuid4()).replace("-", ""))[:30]
         payload = {
-            "apikey": self.public_key,
-            "reference": ref,
-            "phone_number": self._normalize_phone(phone),
+            "accountNumber": self.account_number,
+            "phoneNumber": self._normalize_phone(phone),
             "amount": int(amount),
             "currency": "UGX",
-            "network": network.upper(),
+            "reference": ref,
+            "description": "Subscription payment",
         }
         try:
-            logger.warning("LIVEPAY COLLECT → phone=%s amount=%s network=%s ref=%s",
-                           payload["phone_number"], payload["amount"], payload["network"], ref)
+            logger.warning("LIVEPAY COLLECT → phone=%s amount=%s ref=%s", payload["phoneNumber"], payload["amount"], ref)
             resp = requests.post(
                 f"{_BASE_URL}/collect-money",
                 json=payload,
-                headers={"Authorization": f"Bearer {self.secret_key}", "Content-Type": "application/json"},
+                headers=self._headers,
                 timeout=_TIMEOUT,
             )
             logger.warning("LIVEPAY COLLECT ← HTTP %s | %.600s", resp.status_code, resp.text)
@@ -56,23 +59,22 @@ class LivePayClient:
         except ValueError:
             return {"status": "error", "message": "Invalid JSON from LivePay"}
 
-    def send(self, amount: int, phone: str, network: str, pin: str, reference: str = None) -> dict:
-        ref = reference or str(uuid.uuid4()).replace("-", "")
+    def send(self, amount: int, phone: str, reference: str = None, description: str = "Payout", pin: str = None, network: str = None) -> dict:
+        ref = (reference or str(uuid.uuid4()).replace("-", ""))[:30]
         payload = {
-            "apikey": self.public_key,
-            "reference": ref,
-            "phone_number": self._normalize_phone(phone),
+            "accountNumber": self.account_number,
+            "phoneNumber": self._normalize_phone(phone),
             "amount": int(amount),
             "currency": "UGX",
-            "network": network.upper(),
-            "pin": pin,
+            "reference": ref,
+            "description": description,
         }
         try:
-            logger.warning("LIVEPAY SEND → phone=%s amount=%s ref=%s", payload["phone_number"], payload["amount"], ref)
+            logger.warning("LIVEPAY SEND → phone=%s amount=%s ref=%s", payload["phoneNumber"], payload["amount"], ref)
             resp = requests.post(
                 f"{_BASE_URL}/send-money",
                 json=payload,
-                headers={"Authorization": f"Bearer {self.secret_key}", "Content-Type": "application/json"},
+                headers=self._headers,
                 timeout=_TIMEOUT,
             )
             logger.warning("LIVEPAY SEND ← HTTP %s | %.600s", resp.status_code, resp.text)
@@ -82,13 +84,12 @@ class LivePayClient:
         except ValueError:
             return {"status": "error", "message": "Invalid JSON from LivePay"}
 
-    def check_status(self, transaction_id: str) -> dict:
-        payload = {"apikey": self.public_key, "transaction_id": transaction_id}
+    def check_status(self, reference: str) -> dict:
         try:
-            resp = requests.post(
-                f"{_BASE_URL}/transaction-status.php",
-                json=payload,
-                headers={"Authorization": f"Bearer {self.secret_key}", "Content-Type": "application/json"},
+            resp = requests.get(
+                f"{_BASE_URL}/transaction-status",
+                params={"accountNumber": self.account_number, "currency": "UGX", "reference": reference},
+                headers=self._headers,
                 timeout=_TIMEOUT,
             )
             logger.warning("LIVEPAY STATUS ← HTTP %s | %.600s", resp.status_code, resp.text)
