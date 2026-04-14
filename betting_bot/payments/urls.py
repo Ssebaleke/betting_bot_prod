@@ -10,6 +10,7 @@ from .views import (
     landing_initiate_payment,
     initiate_live_payment_view,
     live_ipn,
+    kwa_ipn,
 )
 
 def home(request):
@@ -25,5 +26,6 @@ urlpatterns = [
     path("webhook/yoo/ipn/", yoo_ipn, name="yoo_ipn"),
     path("webhook/yoo/failure/", yoo_failure_ipn, name="yoo_failure_ipn"),
     path("webhook/live/ipn/", live_ipn, name="live_ipn"),
+    path("webhook/kwa/ipn/", kwa_ipn, name="kwa_ipn"),
     path("status/<str:reference>/", payment_status, name="payment_status"),
 ]

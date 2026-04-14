@@ -159,10 +159,12 @@ class Payment(models.Model):
     PROVIDER_MAKYPAY = "MAKYPAY"
     PROVIDER_YOO = "YOO"
     PROVIDER_LIVE = "LIVE"
+    PROVIDER_KWA = "KWA"
     PROVIDER_TYPE_CHOICES = (
         (PROVIDER_MAKYPAY, "MakyPay"),
         (PROVIDER_YOO, "Yo! Payments"),
         (PROVIDER_LIVE, "LivePay"),
+        (PROVIDER_KWA, "KwaPay"),
     )
 
     CHANNEL_TELEGRAM = "TELEGRAM"
@@ -309,6 +311,30 @@ class OwnerWallet(models.Model):
             wallet.balance += Decimal(str(amount))
             wallet.total_earned += Decimal(str(amount))
             wallet.save(update_fields=["balance", "total_earned", "updated_at"])
+
+
+class KwaPayProvider(models.Model):
+    name = models.CharField(max_length=50, default="KwaPay")
+    primary_api = models.CharField(max_length=255)
+    secondary_api = models.CharField(max_length=255)
+    callback_url = models.URLField(help_text="Webhook URL KwaPay will POST results to")
+    withdrawal_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        help_text="Fixed fee deducted from every withdrawal (UGX)."
+    )
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "KwaPay Provider"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            KwaPayProvider.objects.exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({'ACTIVE' if self.is_active else 'inactive'})"
 
 
 class WithdrawalRequest(models.Model):

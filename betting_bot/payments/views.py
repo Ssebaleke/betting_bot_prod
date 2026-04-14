@@ -9,7 +9,7 @@ from django.conf import settings
 
 from packages.models import Package
 from .models import Payment
-from .services import initiate_payment, initiate_yoo_payment, initiate_live_payment, confirm_payment, initiate_web_payment
+from .services import initiate_payment, initiate_yoo_payment, initiate_live_payment, initiate_kwa_payment, confirm_payment, initiate_web_payment
 from .yoo_client import restore_reference
 
 logger = logging.getLogger(__name__)
@@ -303,6 +303,31 @@ def payment_status(request, reference):
     except Payment.DoesNotExist:
         return HttpResponseBadRequest("Invalid reference")
 
+    # For KwaPay pending payments, poll KwaPay directly
+    if payment.status == Payment.STATUS_PENDING and payment.provider_type == Payment.PROVIDER_KWA:
+        try:
+            from .models import KwaPayProvider
+            from .kwa_client import KwaPayClient
+            provider = KwaPayProvider.objects.filter(is_active=True).first()
+            if provider and payment.external_reference:
+                client = KwaPayClient(primary_api=provider.primary_api, secondary_api=provider.secondary_api)
+                result = client.check_status(payment.external_reference)
+                logger.warning("KWAPAY STATUS POLL ref=%s result=%s", reference, result)
+                status_val = str(result.get("status", "")).upper()
+                if not result.get("error") and status_val == "SUCCESSFUL":
+                    confirmed = confirm_payment(reference=payment.reference, external_reference=payment.external_reference)
+                    from .services import _post_payment_notifications
+                    from subscription.models import Subscription
+                    sub = Subscription.objects.filter(user=confirmed.user, is_active=True).order_by("-created_at").first()
+                    if sub:
+                        _post_payment_notifications(confirmed.id, sub.id)
+                    payment.refresh_from_db()
+                elif status_val == "FAILED":
+                    payment.status = Payment.STATUS_FAILED
+                    payment.save(update_fields=["status"])
+        except Exception as e:
+            logger.error("KwaPay status poll error ref=%s: %s", reference, e)
+
     # For LivePay pending payments, poll LivePay directly
     if payment.status == Payment.STATUS_PENDING and payment.provider_type == Payment.PROVIDER_LIVE:
         try:
@@ -531,3 +556,86 @@ def live_ipn(request):
             logger.error("LIVEPAY IPN failed handler error: %s", e)
 
     return HttpResponse(json.dumps({"status": "received", "message": "Webhook processed successfully"}), content_type="application/json")
+
+
+@csrf_exempt
+def kwa_ipn(request):
+    """POST /pay/webhook/kwa/ipn/ — KwaPay webhook.
+    Payload: internal_reference, status (SUCCESSFUL/FAILED), amount, network, phone_number
+    """
+    if request.method != "POST":
+        return HttpResponse("OK")
+
+    try:
+        data = json.loads(request.body.decode("utf-8", errors="replace"))
+    except Exception:
+        data = {}
+
+    logger.warning("KWAPAY IPN received: %s", data)
+
+    internal_reference = data.get("internal_reference", "")
+    status = str(data.get("status", "")).upper()
+
+    if not internal_reference:
+        logger.warning("KWAPAY IPN: no internal_reference — ignoring")
+        return HttpResponse("OK")
+
+    is_success = status == "SUCCESSFUL"
+    is_failed = status == "FAILED"
+
+    if is_success:
+        try:
+            # Check SMS top-up first
+            from payments.models import SMSTopUp, SMSBalance
+            topup = SMSTopUp.objects.filter(payment_reference=internal_reference).first()
+            if topup:
+                if topup.status != SMSTopUp.STATUS_SUCCESS:
+                    topup.status = SMSTopUp.STATUS_SUCCESS
+                    topup.save(update_fields=["status"])
+                    bal = SMSBalance.get()
+                    bal.credits += topup.credits_added
+                    bal.save(update_fields=["credits", "updated_at"])
+                return HttpResponse("OK")
+
+            payment = Payment.objects.filter(external_reference=internal_reference).first()
+            if not payment:
+                payment = Payment.objects.filter(reference=internal_reference).first()
+            if not payment:
+                logger.warning("KWAPAY IPN: no payment found for ref=%s", internal_reference)
+                return HttpResponse("OK")
+            if payment.status == Payment.STATUS_SUCCESS:
+                return HttpResponse("OK")
+            confirm_payment(reference=payment.reference, external_reference=internal_reference)
+            logger.warning("KWAPAY IPN: payment confirmed ref=%s", internal_reference)
+            try:
+                payment.refresh_from_db()
+                from .services import _post_payment_notifications
+                from subscription.models import Subscription
+                sub = Subscription.objects.filter(user=payment.user, is_active=True).order_by("-created_at").first()
+                if sub:
+                    _post_payment_notifications(payment.id, sub.id)
+                if payment.delivery_channel == Payment.CHANNEL_TELEGRAM:
+                    from bots.notifications import notify_payment_success
+                    notify_payment_success(payment.user, payment.package, payment)
+            except Exception as e:
+                logger.error("KWAPAY IPN notification error: %s", e)
+        except Exception as e:
+            logger.error("KWAPAY IPN error: %s", e)
+
+    elif is_failed:
+        try:
+            from payments.models import SMSTopUp
+            topup = SMSTopUp.objects.filter(payment_reference=internal_reference).first()
+            if topup:
+                if topup.status == SMSTopUp.STATUS_PENDING:
+                    topup.status = SMSTopUp.STATUS_FAILED
+                    topup.save(update_fields=["status"])
+                return HttpResponse("OK")
+            payment = Payment.objects.filter(external_reference=internal_reference).first()
+            if payment and payment.status == Payment.STATUS_PENDING:
+                payment.status = Payment.STATUS_FAILED
+                payment.save(update_fields=["status"])
+        except Exception as e:
+            logger.error("KWAPAY IPN failed handler error: %s", e)
+
+    return HttpResponse("OK")

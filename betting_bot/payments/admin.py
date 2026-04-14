@@ -141,6 +141,8 @@ class YooPaymentProviderAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if obj.is_active:
             LivePayProvider.objects.update(is_active=False)
+            from .models import KwaPayProvider
+            KwaPayProvider.objects.update(is_active=False)
             YooPaymentProvider.objects.exclude(pk=obj.pk).update(is_active=False)
             self.message_user(request, "✅ Yo! Payments activated. All other providers deactivated.", messages.SUCCESS)
         super().save_model(request, obj, form, change)
@@ -158,6 +160,8 @@ class LivePayProviderAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if obj.is_active:
             YooPaymentProvider.objects.update(is_active=False)
+            from .models import KwaPayProvider
+            KwaPayProvider.objects.update(is_active=False)
             LivePayProvider.objects.exclude(pk=obj.pk).update(is_active=False)
             self.message_user(request, "✅ LivePay activated. All other providers deactivated.", messages.SUCCESS)
         super().save_model(request, obj, form, change)
@@ -311,3 +315,22 @@ class WithdrawalRequestAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(KwaPayProvider)
+class KwaPayProviderAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "created_at")
+    list_editable = ("is_active",)
+    fieldsets = (
+        ("Credentials", {"fields": ("name", "primary_api", "secondary_api", "callback_url", "withdrawal_fee")}),
+        ("Status", {"fields": ("is_active",)}),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if obj.is_active:
+            from .models import YooPaymentProvider, LivePayProvider
+            YooPaymentProvider.objects.update(is_active=False)
+            LivePayProvider.objects.update(is_active=False)
+            KwaPayProvider.objects.exclude(pk=obj.pk).update(is_active=False)
+            self.message_user(request, "✅ KwaPay activated. All other providers deactivated.", messages.SUCCESS)
+        super().save_model(request, obj, form, change)

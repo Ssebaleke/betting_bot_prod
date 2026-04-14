@@ -9,10 +9,11 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 
 from packages.models import Package
-from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider, LivePayProvider, RevenueConfig, OwnerWallet, PlatformWallet
+from .models import Payment, PaymentProvider, PaymentProviderConfig, YooPaymentProvider, LivePayProvider, KwaPayProvider, RevenueConfig, OwnerWallet, PlatformWallet
 from .makypay import MakyPayClient, normalize_ug_phone
 from .yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
 from .live_client import LivePayClient
+from .kwa_client import KwaPayClient, normalize_phone as normalize_kwa_phone, make_reference as kwa_make_reference
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ def initiate_web_payment(phone: str, package_id: int) -> Payment:
     """Entry point for landing page payments - auto-creates user, forces SMS channel."""
     user = get_or_create_phone_user(phone)
     package = Package.objects.get(id=package_id, is_active=True)
+
+    kwa = KwaPayProvider.objects.filter(is_active=True).first()
+    if kwa:
+        return initiate_kwa_payment(user=user, package=package, phone=phone, delivery_channel="SMS")
 
     live = LivePayProvider.objects.filter(is_active=True).first()
     if live:
@@ -191,6 +196,64 @@ def initiate_live_payment(user: User, package: Package, phone: str, delivery_cha
     # Store LivePay transaction_id as external_reference for status polling
     transaction_id = result.get("data", {}).get("transaction_id") or reference
     payment.external_reference = transaction_id
+    payment.save(update_fields=["external_reference"])
+
+    return payment
+
+
+@transaction.atomic
+def initiate_kwa_payment(user: User, package: Package, phone: str, delivery_channel: str = "TELEGRAM") -> Payment:
+    provider = KwaPayProvider.objects.filter(is_active=True).first()
+    if not provider:
+        raise ValueError("No active KwaPay provider configured.")
+
+    price_val = getattr(package, "price", None) or getattr(package, "amount", None)
+    if price_val is None:
+        raise ValueError("Package has no price field.")
+
+    amount = Decimal(str(price_val))
+    phone_normalized = normalize_kwa_phone(phone)
+
+    recent = Payment.objects.filter(
+        user=user,
+        status=Payment.STATUS_PENDING,
+        provider_type=Payment.PROVIDER_KWA,
+        created_at__gte=timezone.now() - timezone.timedelta(minutes=2),
+    ).order_by("-created_at").first()
+    if recent:
+        return recent
+
+    reference = kwa_make_reference()
+
+    payment = Payment.objects.create(
+        user=user,
+        package=package,
+        provider=None,
+        provider_type=Payment.PROVIDER_KWA,
+        phone=phone_normalized,
+        amount=amount,
+        reference=reference,
+        delivery_channel=delivery_channel,
+        status=Payment.STATUS_PENDING,
+    )
+
+    client = KwaPayClient(primary_api=provider.primary_api, secondary_api=provider.secondary_api)
+    result = client.collect(
+        phone=phone_normalized,
+        amount=int(amount),
+        reference=reference,
+        callback_url=provider.callback_url,
+    )
+
+    logger.info("KwaPay collect result ref=%s result=%s", reference, result)
+
+    if result.get("error"):
+        payment.status = Payment.STATUS_FAILED
+        payment.save(update_fields=["status"])
+        raise ValueError(f"KwaPay rejected payment: {result.get('message', 'Unknown error')}")
+
+    # Store KwaPay internal_reference for status polling
+    payment.external_reference = result.get("internal_reference", reference)
     payment.save(update_fields=["external_reference"])
 
     return payment
