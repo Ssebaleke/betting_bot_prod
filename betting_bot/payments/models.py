@@ -342,3 +342,6 @@ class WithdrawalRequest(models.Model):
 
     def __str__(self):
         return f"UGX {self.amount} → {self.payout_phone} ({self.status})"
+    
+    
+    #hello
