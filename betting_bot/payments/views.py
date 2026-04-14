@@ -475,9 +475,9 @@ def live_ipn(request):
     from .models import LivePayProvider
     from .live_client import LivePayClient
     provider = LivePayProvider.objects.filter(is_active=True).first()
-    if provider:
-        sig_header = request.headers.get("livepay-signature", "")
-        if sig_header and not LivePayClient.verify_webhook_signature(provider.secret_key, sig_header, data):
+    if provider and provider.webhook_secret:
+        sig_header = request.headers.get("X-Webhook-Signature", "")
+        if sig_header and not LivePayClient.verify_webhook_signature(provider.webhook_secret, sig_header, data):
             logger.warning("LIVEPAY IPN: signature mismatch — processing anyway for now")
 
     # Fields per LivePay docs

@@ -154,8 +154,10 @@ class LivePayProviderAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active", "created_at")
     list_editable = ("is_active",)
     fieldsets = (
-        ("Credentials", {"fields": ("name", "public_key", "secret_key", "transaction_pin", "withdrawal_fee"),
-                         "description": "public_key = Account Number (e.g. LP7025527774) | secret_key = API Key (Bearer token)"}),
+        ("Credentials", {
+            "fields": ("name", "public_key", "secret_key", "webhook_secret", "transaction_pin", "withdrawal_fee", "gateway_fee_percentage"),
+            "description": "public_key = Account Number (e.g. LP7025527774) | secret_key = API Key (Bearer token) | webhook_secret = from LivePay Webhook Configuration"
+        }),
         ("Status", {"fields": ("is_active",)}),
     )
 

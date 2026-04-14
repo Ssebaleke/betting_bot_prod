@@ -205,12 +205,17 @@ class Payment(models.Model):
 
 class LivePayProvider(models.Model):
     name = models.CharField(max_length=50, default="LivePay")
-    public_key = models.CharField(max_length=255, help_text="Your LivePay Account Number e.g. LP7025527774")
-    secret_key = models.CharField(max_length=255, help_text="Your LivePay API Key (Bearer token from dashboard)")
+    public_key = models.CharField(max_length=255, help_text="Account Number e.g. LP7025527774")
+    secret_key = models.CharField(max_length=255, help_text="API Key (Bearer token from LivePay dashboard → API Keys)")
+    webhook_secret = models.CharField(max_length=255, blank=True, help_text="Webhook Secret from LivePay dashboard → Webhook Configuration")
     transaction_pin = models.CharField(max_length=20, blank=True, help_text="PIN for Send Money (withdrawals)")
     withdrawal_fee = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal("0.00"),
         help_text="Fixed fee added on top of every withdrawal (UGX). Set manually."
+    )
+    gateway_fee_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        help_text="LivePay gateway fee % per transaction e.g. 3.0 for 3%"
     )
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
