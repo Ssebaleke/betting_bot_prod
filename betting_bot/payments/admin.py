@@ -18,6 +18,7 @@ from .models import (
     PlatformWallet,
     OwnerWallet,
     WithdrawalRequest,
+    KwaPayProvider,
 )
 
 
