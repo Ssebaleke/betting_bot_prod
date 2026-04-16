@@ -42,5 +42,6 @@ urlpatterns = [
     # Wallet & Withdrawal
     path("wallet/", views.wallet, name="wallet"),
     path("wallet/withdraw/", views.wallet_withdraw, name="wallet_withdraw"),
+    path("wallet/owner-withdraw/", views.owner_withdraw, name="owner_withdraw"),
     path("wallet/reset/", views.wallet_reset, name="wallet_reset"),
 ]

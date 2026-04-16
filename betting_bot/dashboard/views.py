@@ -480,8 +480,7 @@ def wallet(request):
 
 @owner_required
 def wallet_withdraw(request):
-    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider
-    from payments.livepay_client import LivePayClient, normalize_phone, detect_network
+    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider, KwaPayProvider, YooPaymentProvider
     from decimal import Decimal
     import uuid
 
@@ -508,35 +507,58 @@ def wallet_withdraw(request):
         messages.error(request, f"Insufficient balance. Available: UGX {wallet.balance:,.0f}")
         return redirect("dashboard:wallet")
 
-    provider = LivePayProvider.objects.filter(is_active=True).first()
-    if not provider:
-        messages.error(request, "No active LivePay provider configured.")
-        return redirect("dashboard:wallet")
-
-    phone_normalized = normalize_phone(phone)
     reference = uuid.uuid4().hex
+    result = None
+    phone_normalized = phone
 
-    withdrawal = WithdrawalRequest.objects.create(
-        amount=amount,
-        payout_phone=phone_normalized,
-        payout_network=detect_network(phone_normalized),
-        status=WithdrawalRequest.STATUS_PENDING,
-    )
+    live_provider = LivePayProvider.objects.filter(is_active=True).first()
+    kwa_provider = KwaPayProvider.objects.filter(is_active=True).first()
+    yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
+    withdrawal = None
     try:
-        client = LivePayClient(
-            secret_key=provider.secret_key,
-            public_key=provider.public_key,
-            pin=provider.transaction_pin,
-        )
-        result = client.send(
-            phone=phone_normalized,
-            amount=int(amount),
-            reference=reference,
-        )
+        if live_provider:
+            from payments.livepay_client import LivePayClient, normalize_phone, detect_network
+            phone_normalized = normalize_phone(phone)
+            withdrawal = WithdrawalRequest.objects.create(
+                amount=amount, payout_phone=phone_normalized,
+                payout_network=detect_network(phone_normalized), status=WithdrawalRequest.STATUS_PENDING,
+            )
+            client = LivePayClient(secret_key=live_provider.secret_key, public_key=live_provider.public_key)
+            result = client.send(phone=phone_normalized, amount=int(amount), reference=reference)
+            success = result.get("success")
+            error_msg = result.get("message", "Unknown error")
 
-        if result.get("success"):
-            # Deduct from wallet
+        elif kwa_provider:
+            from payments.kwa_client import KwaPayClient, normalize_phone
+            phone_normalized = normalize_phone(phone)
+            withdrawal = WithdrawalRequest.objects.create(
+                amount=amount, payout_phone=phone_normalized,
+                payout_network="MTN", status=WithdrawalRequest.STATUS_PENDING,
+            )
+            client = KwaPayClient(primary_api=kwa_provider.primary_api, secondary_api=kwa_provider.secondary_api)
+            result = client.withdraw(phone=phone_normalized, amount=int(amount), callback_url=kwa_provider.callback_url)
+            success = not result.get("error")
+            error_msg = result.get("message", "Unknown error")
+
+        elif yoo_provider:
+            from payments.yoo_client import YooClient, normalize_phone, make_reference
+            phone_normalized = normalize_phone(phone)
+            reference = make_reference()
+            withdrawal = WithdrawalRequest.objects.create(
+                amount=amount, payout_phone=phone_normalized,
+                payout_network="MTN", status=WithdrawalRequest.STATUS_PENDING,
+            )
+            client = YooClient(api_username=yoo_provider.api_username, api_password=yoo_provider.api_password)
+            result = client.disburse(phone=phone_normalized, amount=int(amount), reference=reference)
+            success = result.get("yoo_status") == "SUCCESS"
+            error_msg = result.get("error_message") or result.get("status_message", "Unknown error")
+
+        else:
+            messages.error(request, "No active payment provider supports withdrawals.")
+            return redirect("dashboard:wallet")
+
+        if success:
             from django.db import transaction as db_tx
             with db_tx.atomic():
                 w = OwnerWallet.objects.select_for_update().get(pk=1)
@@ -547,13 +569,14 @@ def wallet_withdraw(request):
             messages.success(request, f"✅ UGX {amount:,.0f} sent to {phone_normalized} successfully.")
         else:
             withdrawal.status = WithdrawalRequest.STATUS_FAILED
-            withdrawal.failure_reason = result.get("message", "Unknown error")
+            withdrawal.failure_reason = error_msg
             withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
-            messages.error(request, f"❌ Withdrawal failed: {result.get('message', 'Unknown error')}")
+            messages.error(request, f"❌ Withdrawal failed: {error_msg}")
     except Exception as e:
-        withdrawal.status = WithdrawalRequest.STATUS_FAILED
-        withdrawal.failure_reason = str(e)
-        withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+        if withdrawal:
+            withdrawal.status = WithdrawalRequest.STATUS_FAILED
+            withdrawal.failure_reason = str(e)
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
         messages.error(request, f"❌ Error: {e}")
 
     return redirect("dashboard:wallet")
@@ -620,34 +643,47 @@ def sms_topup_pay(request):
     if credits_to_add < 1:
         return JsonResponse({"success": False, "error": f"Minimum amount is UGX {int(balance.price_per_sms):,} for 1 credit."}, status=400)
 
-    # Use LivePay if active, else fall back to Yoo
+    from payments.models import KwaPayProvider
     live_provider = LivePayProvider.objects.filter(is_active=True).first()
+    kwa_provider = KwaPayProvider.objects.filter(is_active=True).first()
     yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
-    if not live_provider and not yoo_provider:
+    if not live_provider and not kwa_provider and not yoo_provider:
         return JsonResponse({"success": False, "error": "No payment provider configured."}, status=400)
 
+    topup = None
     try:
-        if live_provider:
+        if kwa_provider:
+            from payments.kwa_client import KwaPayClient, normalize_phone, make_reference
+            reference = make_reference()
+            topup = SMSTopUp.objects.create(
+                phone=phone, amount_paid=amount, credits_added=credits_to_add,
+                payment_reference=reference, status=SMSTopUp.STATUS_PENDING,
+            )
+            client = KwaPayClient(primary_api=kwa_provider.primary_api, secondary_api=kwa_provider.secondary_api)
+            result = client.collect(
+                phone=normalize_phone(phone), amount=int(amount),
+                reference=reference, callback_url=kwa_provider.callback_url,
+            )
+            if result.get("error"):
+                topup.status = SMSTopUp.STATUS_FAILED
+                topup.save(update_fields=["status"])
+                return JsonResponse({"success": False, "error": result.get("message", "Payment rejected.")}, status=400)
+
+        elif live_provider:
             from payments.livepay_client import LivePayClient, normalize_phone, make_reference
             reference = make_reference()
             topup = SMSTopUp.objects.create(
                 phone=phone, amount_paid=amount, credits_added=credits_to_add,
                 payment_reference=reference, status=SMSTopUp.STATUS_PENDING,
             )
-            client = LivePayClient(
-                secret_key=live_provider.secret_key,
-                public_key=live_provider.public_key,
-            )
-            result = client.collect(
-                phone=normalize_phone(phone),
-                amount=int(amount),
-                reference=reference,
-            )
+            client = LivePayClient(secret_key=live_provider.secret_key, public_key=live_provider.public_key)
+            result = client.collect(phone=normalize_phone(phone), amount=int(amount), reference=reference)
             if result.get("status") == "error":
                 topup.status = SMSTopUp.STATUS_FAILED
                 topup.save(update_fields=["status"])
                 return JsonResponse({"success": False, "error": result.get("message", "Payment rejected.")}, status=400)
+
         else:
             from payments.yoo_client import YooClient, make_reference, normalize_phone as normalize_yoo_phone
             reference = make_reference()
@@ -666,8 +702,9 @@ def sms_topup_pay(request):
                 return JsonResponse({"success": False, "error": result.get("error_message", "Payment rejected.")}, status=400)
 
     except Exception as e:
-        topup.status = SMSTopUp.STATUS_FAILED
-        topup.save(update_fields=["status"])
+        if topup:
+            topup.status = SMSTopUp.STATUS_FAILED
+            topup.save(update_fields=["status"])
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": True, "reference": reference, "credits": credits_to_add})
@@ -705,8 +742,7 @@ def owner_wallet(request):
 def owner_withdraw(request):
     import json
     from decimal import Decimal
-    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider
-    from payments.live_client import LivePayClient
+    from payments.models import OwnerWallet, WithdrawalRequest, LivePayProvider, KwaPayProvider, YooPaymentProvider
 
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "POST only"}, status=405)
@@ -724,46 +760,72 @@ def owner_withdraw(request):
         return JsonResponse({"success": False, "error": "Amount and phone are required"}, status=400)
 
     amount = Decimal(str(amount))
-
     if amount < 10000:
         return JsonResponse({"success": False, "error": "Minimum withdrawal is UGX 10,000"}, status=400)
 
     wallet = OwnerWallet.get()
-
-    provider = LivePayProvider.objects.filter(is_active=True).first()
-    if not provider:
-        return JsonResponse({"success": False, "error": "No active LivePay provider configured"}, status=400)
-
-    if not provider.transaction_pin:
-        return JsonResponse({"success": False, "error": "LivePay transaction PIN not configured"}, status=400)
-
-    fee = provider.withdrawal_fee or Decimal("0")
-    amount_to_send = amount - fee  # deduct fee from amount
-
-    if amount_to_send <= 0:
-        return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
-
     if amount > wallet.balance:
         return JsonResponse({"success": False, "error": f"Insufficient wallet balance. Available: UGX {int(wallet.balance):,}"}, status=400)
 
     import uuid as _uuid
-    ref = str(_uuid.uuid4()).replace("-", "")
+    ref = _uuid.uuid4().hex
 
-    client = LivePayClient(public_key=provider.public_key, secret_key=provider.secret_key)
-    result = client.send(
-        amount=int(amount_to_send),
-        phone=phone,
-        reference=ref,
-    )
+    live_provider = LivePayProvider.objects.filter(is_active=True).first()
+    kwa_provider = KwaPayProvider.objects.filter(is_active=True).first()
+    yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
-    if not result.get("success"):
-        error_msg = result.get("message") or "Disbursement failed"
+    success = False
+    error_msg = "No active payment provider supports withdrawals."
+    amount_to_send = amount
+    fee = Decimal("0")
+
+    try:
+        if live_provider:
+            from payments.live_client import LivePayClient
+            fee = live_provider.withdrawal_fee or Decimal("0")
+            amount_to_send = amount - fee
+            if amount_to_send <= 0:
+                return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
+            client = LivePayClient(public_key=live_provider.public_key, secret_key=live_provider.secret_key)
+            result = client.send(amount=int(amount_to_send), phone=phone, reference=ref)
+            success = result.get("success", False)
+            error_msg = result.get("message") or "Disbursement failed"
+
+        elif kwa_provider:
+            from payments.kwa_client import KwaPayClient, normalize_phone
+            fee = kwa_provider.withdrawal_fee or Decimal("0")
+            amount_to_send = amount - fee
+            if amount_to_send <= 0:
+                return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
+            phone = normalize_phone(phone)
+            client = KwaPayClient(primary_api=kwa_provider.primary_api, secondary_api=kwa_provider.secondary_api)
+            result = client.withdraw(phone=phone, amount=int(amount_to_send), callback_url=kwa_provider.callback_url)
+            success = not result.get("error")
+            error_msg = result.get("message", "Disbursement failed")
+
+        elif yoo_provider:
+            from payments.yoo_client import YooClient, normalize_phone, make_reference
+            phone = normalize_phone(phone)
+            ref = make_reference()
+            client = YooClient(api_username=yoo_provider.api_username, api_password=yoo_provider.api_password)
+            result = client.disburse(phone=phone, amount=int(amount), reference=ref)
+            success = result.get("yoo_status") == "SUCCESS"
+            error_msg = result.get("error_message") or result.get("status_message", "Disbursement failed")
+
+        else:
+            return JsonResponse({"success": False, "error": error_msg}, status=400)
+
+    except Exception as e:
         WithdrawalRequest.objects.create(
-            amount=amount,
-            payout_phone=phone,
-            payout_network=network,
-            status=WithdrawalRequest.STATUS_FAILED,
-            failure_reason=error_msg,
+            amount=amount, payout_phone=phone, payout_network=network,
+            status=WithdrawalRequest.STATUS_FAILED, failure_reason=str(e),
+        )
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    if not success:
+        WithdrawalRequest.objects.create(
+            amount=amount, payout_phone=phone, payout_network=network,
+            status=WithdrawalRequest.STATUS_FAILED, failure_reason=error_msg,
         )
         return JsonResponse({"success": False, "error": error_msg}, status=400)
 
@@ -772,13 +834,10 @@ def owner_withdraw(request):
         locked = OwnerWallet.objects.select_for_update().get(pk=1)
         if amount > locked.balance:
             return JsonResponse({"success": False, "error": "Insufficient balance"}, status=400)
-        locked.balance -= amount  # deduct full amount (including fee)
+        locked.balance -= amount
         locked.save(update_fields=["balance", "updated_at"])
-
         WithdrawalRequest.objects.create(
-            amount=amount,
-            payout_phone=phone,
-            payout_network=network,
+            amount=amount, payout_phone=phone, payout_network=network,
             status=WithdrawalRequest.STATUS_PAID,
         )
 
