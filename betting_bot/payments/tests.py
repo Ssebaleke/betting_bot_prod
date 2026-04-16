@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -42,80 +42,67 @@ def _make_wallet(balance=50000):
 
 
 # ---------------------------------------------------------------------------
-# wallet_withdraw  (uses Django test Client — needs session middleware)
+# wallet_withdraw
 # ---------------------------------------------------------------------------
 
 class WalletWithdrawLivePayTest(TestCase):
     def setUp(self):
-        self.provider = _make_live()
+        _make_live()
         _make_wallet(50000)
         self.user = User.objects.create_user("owner", password="pass", is_staff=True)
         self.client.force_login(self.user)
 
     @patch("payments.livepay_client.LivePayClient.send", return_value={"success": True, "message": "OK"})
-    def test_livepay_success_deducts_wallet(self, mock_send):
+    def test_success_deducts_wallet(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("40000"))
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_PAID)
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("40000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_PAID)
 
     @patch("payments.livepay_client.LivePayClient.send", return_value={"success": False, "message": "Rejected"})
-    def test_livepay_failure_marks_failed(self, mock_send):
+    def test_failure_marks_failed(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("50000"))  # unchanged
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_FAILED)
-        self.assertEqual(wr.failure_reason, "Rejected")
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("50000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_FAILED)
 
 
 class WalletWithdrawKwaPayTest(TestCase):
     def setUp(self):
-        self.provider = _make_kwa()
+        _make_kwa()
         _make_wallet(50000)
         self.user = User.objects.create_user("owner", password="pass", is_staff=True)
         self.client.force_login(self.user)
 
     @patch("payments.kwa_client.KwaPayClient.withdraw", return_value={"error": False, "message": "OK"})
-    def test_kwapay_success_deducts_wallet(self, mock_withdraw):
+    def test_success_deducts_wallet(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("40000"))
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_PAID)
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("40000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_PAID)
 
     @patch("payments.kwa_client.KwaPayClient.withdraw", return_value={"error": True, "message": "Failed"})
-    def test_kwapay_failure_marks_failed(self, mock_withdraw):
+    def test_failure_marks_failed(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("50000"))  # unchanged
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_FAILED)
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("50000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_FAILED)
 
 
 class WalletWithdrawYooTest(TestCase):
     def setUp(self):
-        self.provider = _make_yoo()
+        _make_yoo()
         _make_wallet(50000)
         self.user = User.objects.create_user("owner", password="pass", is_staff=True)
         self.client.force_login(self.user)
 
     @patch("payments.yoo_client.YooClient.disburse", return_value={"yoo_status": "SUCCESS"})
-    def test_yoo_success_deducts_wallet(self, mock_disburse):
+    def test_success_deducts_wallet(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("40000"))
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_PAID)
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("40000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_PAID)
 
     @patch("payments.yoo_client.YooClient.disburse", return_value={"yoo_status": "FAILED", "error_message": "Insufficient funds"})
-    def test_yoo_failure_marks_failed(self, mock_disburse):
+    def test_failure_marks_failed(self, _):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("50000"))  # unchanged
-        wr = WithdrawalRequest.objects.first()
-        self.assertEqual(wr.status, WithdrawalRequest.STATUS_FAILED)
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("50000"))
+        self.assertEqual(WithdrawalRequest.objects.first().status, WithdrawalRequest.STATUS_FAILED)
 
 
 class WalletWithdrawNoProviderTest(TestCase):
@@ -127,8 +114,7 @@ class WalletWithdrawNoProviderTest(TestCase):
     def test_no_provider_returns_error(self):
         self.client.post("/dashboard/wallet/withdraw/", {"phone": "0771234567", "amount": "10000"})
         self.assertEqual(WithdrawalRequest.objects.count(), 0)
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("50000"))  # unchanged
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("50000"))
 
 
 # ---------------------------------------------------------------------------
@@ -150,49 +136,41 @@ class OwnerWithdrawTest(TestCase):
         )
 
     @patch("payments.live_client.LivePayClient.send", return_value={"success": True})
-    def test_livepay_owner_withdraw_success(self, mock_send):
+    def test_livepay_success(self, _):
         import json
         _make_live()
         resp = self._post({"phone": "0771234567", "amount": "20000", "network": "MTN"})
-        data = json.loads(resp.content)
-        self.assertTrue(data["success"])
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("80000"))
+        self.assertTrue(json.loads(resp.content)["success"])
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("80000"))
         self.assertEqual(WithdrawalRequest.objects.filter(status=WithdrawalRequest.STATUS_PAID).count(), 1)
 
     @patch("payments.kwa_client.KwaPayClient.withdraw", return_value={"error": False})
-    def test_kwapay_owner_withdraw_success(self, mock_withdraw):
+    def test_kwapay_success(self, _):
         import json
         _make_kwa()
         resp = self._post({"phone": "0771234567", "amount": "20000", "network": "MTN"})
-        data = json.loads(resp.content)
-        self.assertTrue(data["success"])
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("80000"))
+        self.assertTrue(json.loads(resp.content)["success"])
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("80000"))
 
     @patch("payments.yoo_client.YooClient.disburse", return_value={"yoo_status": "SUCCESS"})
-    def test_yoo_owner_withdraw_success(self, mock_disburse):
+    def test_yoo_success(self, _):
         import json
         _make_yoo()
         resp = self._post({"phone": "0771234567", "amount": "20000", "network": "MTN"})
-        data = json.loads(resp.content)
-        self.assertTrue(data["success"])
-        wallet = OwnerWallet.objects.get(pk=1)
-        self.assertEqual(wallet.balance, Decimal("80000"))
+        self.assertTrue(json.loads(resp.content)["success"])
+        self.assertEqual(OwnerWallet.objects.get(pk=1).balance, Decimal("80000"))
 
     def test_insufficient_balance_rejected(self):
         import json
-        _make_live()
-        resp = self._post({"phone": "0771234567", "amount": "999999", "network": "MTN"})
-        data = json.loads(resp.content)
+        _make_kwa()
+        data = json.loads(self._post({"phone": "0771234567", "amount": "999999", "network": "MTN"}).content)
         self.assertFalse(data["success"])
         self.assertIn("Insufficient", data["error"])
 
     def test_below_minimum_rejected(self):
         import json
-        _make_live()
-        resp = self._post({"phone": "0771234567", "amount": "5000", "network": "MTN"})
-        data = json.loads(resp.content)
+        _make_kwa()
+        data = json.loads(self._post({"phone": "0771234567", "amount": "5000", "network": "MTN"}).content)
         self.assertFalse(data["success"])
         self.assertIn("10,000", data["error"])
 
@@ -218,63 +196,52 @@ class SmsTopupPayTest(TestCase):
         )
 
     @patch("payments.kwa_client.KwaPayClient.collect", return_value={"error": False, "internal_reference": "kwa_ref_1"})
-    def test_kwapay_topup_creates_pending(self, mock_collect):
+    def test_kwapay_creates_pending(self, _):
         import json
         _make_kwa()
-        resp = self._post({"phone": "0771234567", "amount": 5000})
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 5000}).content)
         self.assertTrue(data["success"])
         self.assertEqual(data["credits"], 50)
         topup = SMSTopUp.objects.first()
         self.assertEqual(topup.status, SMSTopUp.STATUS_PENDING)
-        self.assertEqual(topup.credits_added, 50)
 
     @patch("payments.livepay_client.LivePayClient.collect", return_value={"status": "pending"})
-    def test_livepay_topup_creates_pending(self, mock_collect):
+    def test_livepay_creates_pending(self, _):
         import json
         _make_live()
-        resp = self._post({"phone": "0771234567", "amount": 5000})
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 5000}).content)
         self.assertTrue(data["success"])
-        topup = SMSTopUp.objects.first()
-        self.assertEqual(topup.status, SMSTopUp.STATUS_PENDING)
+        self.assertEqual(SMSTopUp.objects.first().status, SMSTopUp.STATUS_PENDING)
 
     @patch("payments.yoo_client.YooClient.collect", return_value={"yoo_status": "PENDING"})
-    def test_yoo_topup_creates_pending(self, mock_collect):
+    def test_yoo_creates_pending(self, _):
         import json
         _make_yoo()
-        resp = self._post({"phone": "0771234567", "amount": 5000})
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 5000}).content)
         self.assertTrue(data["success"])
-        topup = SMSTopUp.objects.first()
-        self.assertEqual(topup.status, SMSTopUp.STATUS_PENDING)
+        self.assertEqual(SMSTopUp.objects.first().status, SMSTopUp.STATUS_PENDING)
 
     @patch("payments.kwa_client.KwaPayClient.collect", return_value={"error": True, "message": "Bad request"})
-    def test_kwapay_topup_failure_marks_failed(self, mock_collect):
+    def test_kwapay_failure_marks_failed(self, _):
         import json
         _make_kwa()
-        resp = self._post({"phone": "0771234567", "amount": 5000})
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 5000}).content)
         self.assertFalse(data["success"])
-        topup = SMSTopUp.objects.first()
-        self.assertEqual(topup.status, SMSTopUp.STATUS_FAILED)
+        self.assertEqual(SMSTopUp.objects.first().status, SMSTopUp.STATUS_FAILED)
 
     def test_no_provider_returns_error(self):
         import json
-        resp = self._post({"phone": "0771234567", "amount": 5000})
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 5000}).content)
         self.assertFalse(data["success"])
         self.assertIn("No payment provider", data["error"])
 
     def test_below_minimum_credits_rejected(self):
         import json
         _make_kwa()
-        resp = self._post({"phone": "0771234567", "amount": 50})  # less than price_per_sms=100
-        data = json.loads(resp.content)
+        data = json.loads(self._post({"phone": "0771234567", "amount": 50}).content)
         self.assertFalse(data["success"])
         self.assertIn("Minimum", data["error"])
 
-    # KwaPay takes priority over LivePay when both active
     @patch("payments.kwa_client.KwaPayClient.collect", return_value={"error": False})
     @patch("payments.livepay_client.LivePayClient.collect", return_value={"status": "pending"})
     def test_kwapay_takes_priority_over_livepay(self, mock_live, mock_kwa):

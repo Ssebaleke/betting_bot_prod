@@ -508,28 +508,15 @@ def wallet_withdraw(request):
         return redirect("dashboard:wallet")
 
     reference = uuid.uuid4().hex
-    result = None
     phone_normalized = phone
+    withdrawal = None
 
     live_provider = LivePayProvider.objects.filter(is_active=True).first()
     kwa_provider = KwaPayProvider.objects.filter(is_active=True).first()
     yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
-    withdrawal = None
     try:
-        if live_provider:
-            from payments.livepay_client import LivePayClient, normalize_phone, detect_network
-            phone_normalized = normalize_phone(phone)
-            withdrawal = WithdrawalRequest.objects.create(
-                amount=amount, payout_phone=phone_normalized,
-                payout_network=detect_network(phone_normalized), status=WithdrawalRequest.STATUS_PENDING,
-            )
-            client = LivePayClient(secret_key=live_provider.secret_key, public_key=live_provider.public_key)
-            result = client.send(phone=phone_normalized, amount=int(amount), reference=reference)
-            success = result.get("success")
-            error_msg = result.get("message", "Unknown error")
-
-        elif kwa_provider:
+        if kwa_provider:
             from payments.kwa_client import KwaPayClient, normalize_phone
             phone_normalized = normalize_phone(phone)
             withdrawal = WithdrawalRequest.objects.create(
@@ -539,6 +526,18 @@ def wallet_withdraw(request):
             client = KwaPayClient(primary_api=kwa_provider.primary_api, secondary_api=kwa_provider.secondary_api)
             result = client.withdraw(phone=phone_normalized, amount=int(amount), callback_url=kwa_provider.callback_url)
             success = not result.get("error")
+            error_msg = result.get("message", "Unknown error")
+
+        elif live_provider:
+            from payments.livepay_client import LivePayClient, normalize_phone, detect_network
+            phone_normalized = normalize_phone(phone)
+            withdrawal = WithdrawalRequest.objects.create(
+                amount=amount, payout_phone=phone_normalized,
+                payout_network=detect_network(phone_normalized), status=WithdrawalRequest.STATUS_PENDING,
+            )
+            client = LivePayClient(secret_key=live_provider.secret_key, public_key=live_provider.public_key)
+            result = client.send(phone=phone_normalized, amount=int(amount), reference=reference)
+            success = result.get("success")
             error_msg = result.get("message", "Unknown error")
 
         elif yoo_provider:
@@ -555,7 +554,7 @@ def wallet_withdraw(request):
             error_msg = result.get("error_message") or result.get("status_message", "Unknown error")
 
         else:
-            messages.error(request, "No active payment provider supports withdrawals.")
+            messages.error(request, "No active payment provider configured.")
             return redirect("dashboard:wallet")
 
         if success:
@@ -774,24 +773,13 @@ def owner_withdraw(request):
     kwa_provider = KwaPayProvider.objects.filter(is_active=True).first()
     yoo_provider = YooPaymentProvider.objects.filter(is_active=True).first()
 
-    success = False
-    error_msg = "No active payment provider supports withdrawals."
-    amount_to_send = amount
     fee = Decimal("0")
+    amount_to_send = amount
+    success = False
+    error_msg = "No active payment provider configured."
 
     try:
-        if live_provider:
-            from payments.live_client import LivePayClient
-            fee = live_provider.withdrawal_fee or Decimal("0")
-            amount_to_send = amount - fee
-            if amount_to_send <= 0:
-                return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
-            client = LivePayClient(public_key=live_provider.public_key, secret_key=live_provider.secret_key)
-            result = client.send(amount=int(amount_to_send), phone=phone, reference=ref)
-            success = result.get("success", False)
-            error_msg = result.get("message") or "Disbursement failed"
-
-        elif kwa_provider:
+        if kwa_provider:
             from payments.kwa_client import KwaPayClient, normalize_phone
             fee = kwa_provider.withdrawal_fee or Decimal("0")
             amount_to_send = amount - fee
@@ -802,6 +790,17 @@ def owner_withdraw(request):
             result = client.withdraw(phone=phone, amount=int(amount_to_send), callback_url=kwa_provider.callback_url)
             success = not result.get("error")
             error_msg = result.get("message", "Disbursement failed")
+
+        elif live_provider:
+            from payments.live_client import LivePayClient
+            fee = live_provider.withdrawal_fee or Decimal("0")
+            amount_to_send = amount - fee
+            if amount_to_send <= 0:
+                return JsonResponse({"success": False, "error": f"Amount must be greater than fee of UGX {int(fee):,}"}, status=400)
+            client = LivePayClient(public_key=live_provider.public_key, secret_key=live_provider.secret_key)
+            result = client.send(amount=int(amount_to_send), phone=phone, reference=ref)
+            success = result.get("success", False)
+            error_msg = result.get("message") or "Disbursement failed"
 
         elif yoo_provider:
             from payments.yoo_client import YooClient, normalize_phone, make_reference
